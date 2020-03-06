@@ -267,9 +267,12 @@
           {{Template "C++.Block" $.Block}}
         } while(false);
       } catch (gapii::AbortException& e) {
-        if (!called) {
-          call(); // abort() was called before the fence.
-        }
+        // HUGUES: crash early
+	std::abort();
+
+        // if (!called) {
+        //   call(); // abort() was called before the fence.
+        // }
       }
 ¶
       {{if GetAnnotation $ "draw_call"}}onPostDrawCall(observer, {{Global "ApiIndex"}});{{end}}

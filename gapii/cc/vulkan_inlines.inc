@@ -17,79 +17,100 @@
 // This file is intended to be included by vulkan_spy.h inside
 // of the gapid namespace.
 
+#include <cstdlib>
+
 inline void VulkanSpy::vkErrInvalidHandle(CallObserver*, std::string handleType, uint64_t handle){
     GAPID_DEBUG("Error: Invalid %s: %" PRIu64, handleType.c_str(), handle)
+    std::abort();
 }
 
 inline void VulkanSpy::vkErrNullPointer(CallObserver*, std::string pointerType) {
     GAPID_WARNING("Error: Null pointer of %s", pointerType.c_str())
+    std::abort();
 }
 
 inline void VulkanSpy::vkErrUnsupported(CallObserver*, std::string val) {
     GAPID_WARNING("Error: Unsupported: %s", val.c_str())
+    std::abort();
 }
 
 inline void VulkanSpy::vkErrNotNullPointer(CallObserver*, std::string pointerType) {
     GAPID_WARNING("Error: Not Null Pointer: %s", pointerType.c_str());
+    std::abort();
 }
 
 inline void VulkanSpy::vkErrUnrecognizedExtension(CallObserver*, std::string name) {
     GAPID_WARNING("Error: Unrecognized extension: %s", name.c_str())
+    std::abort();
 }
 
 inline void VulkanSpy::vkErrExpectNVDedicatedlyAllocatedHandle(CallObserver*, std::string handleType, uint64_t handle) {
     GAPID_DEBUG("Error: Expected handle that was allocated with a dedicated allocation: %s: %" PRIu64, handleType.c_str(), handle)
+    std::abort();
 }
 
 inline void VulkanSpy::vkErrInvalidDescriptorArrayElement(CallObserver*, uint64_t set, uint32_t binding, uint32_t array_index) {
   GAPID_DEBUG("Error: Invalid descriptor array element specified by descriptor set: %" PRIu64 ", binding: %" PRIu32 ", array index: %" PRIu32, set, binding, array_index);
+    std::abort();
 }
 
 inline void VulkanSpy::vkErrCommandBufferIncomplete(CallObserver*, VkCommandBuffer cmdbuf) {
     GAPID_DEBUG("Error: Executing command buffer %zu was not in the COMPLETED state", cmdbuf)
+    std::abort();
 }
 
 inline void VulkanSpy::vkErrCommandBufferNotRecording(CallObserver*, VkCommandBuffer cmdbuf) {
     GAPID_DEBUG("Error: Executing command buffer %zu was not in the RECORDING state", cmdbuf)
+    std::abort();
 }
 
 inline void VulkanSpy::vkErrQueryOutOfRange(CallObserver*, VkQueryPool queryPool, uint32_t query) {
     GAPID_DEBUG("Error: Query %" PRIu32 " in QueryPool %" PRIu64 " was out of range", query, queryPool)
+    std::abort();
 }
 
 inline void VulkanSpy::vkErrQueryUninitialized(CallObserver*, VkQueryPool queryPool, uint32_t query) {
     GAPID_DEBUG("Error: Query %" PRIu32 " in QueryPool %" PRIu64 " was uninitialized", query, queryPool)
+    std::abort();
 }
 
 inline void VulkanSpy::vkErrQueryNotInactive(CallObserver*, VkQueryPool queryPool, uint32_t query) {
     GAPID_DEBUG("Error: Query %" PRIu32 " in QueryPool %" PRIu64 " was not in the INACTIVE state", query, queryPool)
+    std::abort();
 }
 
 inline void VulkanSpy::vkErrQueryNotActive(CallObserver*, VkQueryPool queryPool, uint32_t query) {
     GAPID_DEBUG("Error: Query %" PRIu32 " in QueryPool %" PRIu64 " was not in the ACTIVE state", query, queryPool)
+    std::abort();
 }
 
 inline void VulkanSpy::vkErrInvalidImageLayout(CallObserver*, VkImage img, uint32_t aspect, uint32_t layer, uint32_t level, uint32_t layout, uint32_t expectedLayout) {
     GAPID_DEBUG("Error: Image subresource at Image: %" PRIu64 ", AspectBit: %" PRIu32 ", Layer: %" PRIu32 ", Level: %" PRIu32 " was in layout %" PRIu32 ", but was expected to be in layout %" PRIu32,
         img, aspect, layer, level, layout, expectedLayout);
+    std::abort();
 }
 
 inline void VulkanSpy::vkErrInvalidImageSubresource(CallObserver*, VkImage img, std::string subresourceType, uint32_t value) {
     GAPID_DEBUG("Error: Accessing invalid image subresource at Image: %" PRIu64 ", %s: %" PRIu32, img, subresourceType.c_str(), value);
+    std::abort();
 }
 
 inline void VulkanSpy::vkErrImageMemoryNotBound(CallObserver*, VkImage img) {
     GAPID_DEBUG("Error: Image %" PRIu64 " has no bound memory", img);
+    std::abort();
 }
 
 inline void VulkanSpy::vkErrSemaphoreNotSubmitted(CallObserver*, VkSemaphore semaphore) {
     GAPID_DEBUG("Error: Semaphore %" PRIu64 " has not submitted for signal", semaphore);
+    std::abort();
 }
 
 inline void VulkanSpy::vkErrInvalidDescriptorCopy(CallObserver*, VkDescriptorSet srcSet, uint32_t srcBinding, VkDescriptorSet dstSet, uint32_t dstBinding) {
     GAPID_WARNING("Error: Copy descriptor set from %" PRIu64 " to %" PRIu64 " for the binding %" PRIu64 " to %" PRIu64 " is invalid", srcSet, dstSet, srcBinding, dstBinding);
+    std::abort();
 }
 
 inline void VulkanSpy::vkErrInvalidDescriptorBindingType(CallObserver*, VkDescriptorSet set, uint32_t binding, uint32_t layout_type, uint32_t update_type) {
     GAPID_DEBUG("Error: Updating descriptor binding at: %" PRIu64 ": %" PRIu32 " with type: %" PRIu32 ", but the type defined in descriptor set layout is: %" PRIu32 "", set, binding, layout_type, update_type);
+    std::abort();
 }
