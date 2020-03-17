@@ -128,3 +128,9 @@ test "${APP_EXIT_STATUS}" -eq 130
 xvfb-run -e xvfb.log -a bazel-bin/pkg/gapit trace -device host -disable-coherentmemorytracker -disable-pcs -disable-unknown-extensions -record-errors -no-buffer -api vulkan -start-at-frame 5 -capture-frames 10 -observe-frames 1 -out out/dist/vulkan_sample.gfxtrace bazel-bin/cmd/vulkan_sample/vulkan_sample
 
 xvfb-run -e xvfb.log -a bazel-bin/pkg/gapit video -gapir-nofallback -type sxs -frames-minimum 10 -out vulkan_sample.mp4  out/dist/vulkan_sample.gfxtrace
+
+# As per recommended by Kokoro documentation, remove everything but the artifacts
+cd $BUILD_ROOT
+du -sh *
+ls | grep -v '^out$' | xarg rm -rf
+ls
