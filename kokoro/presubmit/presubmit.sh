@@ -108,7 +108,7 @@ check "git workspace must be clean" true
 check copyright-headers run_copyright_headers
 
 # Check clang-format.
-check clang-format run_clang_format
+# check clang-format run_clang_format
 
 # Check gofmt.
 check gofmt run_gofmt

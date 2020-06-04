@@ -429,6 +429,7 @@ test_suite(
         "//gapil/template:go_default_test",
         "//gapil/validate:go_default_test",
         "//gapir/cc:tests",
+        "//gapir/client:go_default_test",
         "//gapis/api:go_default_test",
         "//gapis/api/test:go_default_test",
         "//gapis/api/transform:go_default_test",
