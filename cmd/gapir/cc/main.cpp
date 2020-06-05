@@ -696,6 +696,13 @@ void android_main(struct android_app* app) {
   std::thread waiting_thread;
   std::atomic<bool> thread_is_done(false);
 
+  // The replayer grpc server listens on a unix file socket, using a filename
+  // that is hardcoded here and on gapis side. We use a file socket such that
+  // we don't need the Android manifest internet persmission, which is
+  // required to create regular sockets. We want to not need the internet
+  // permission because Gapir does not really need access to the internet, it
+  // just offers a grpc server.
+
   // Get the path of the file system socket.
   const char* pipe = pipeName();
   std::string internal_data_path = std::string(app->activity->internalDataPath);
