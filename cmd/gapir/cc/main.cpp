@@ -325,6 +325,21 @@ std::unique_ptr<Server> Setup(const char* uri, const char* authToken,
       uri, authToken, idleTimeoutSec,
       [cache, memMgr, crashHandler, lock,
        prewarm](GrpcReplayService* replayConn) {
+         // This lambda implements the ReplayHandler. We should
+         // report any error back to GAPIS through the replayConn. In case of
+         // oustanding errors (i.e. errors outside the ones that can be reported
+         // via a replay notification), use GAPID_FATAL to log the error and force
+         // a replayer crash: the crash uploader will take care of sending the crash
+         // dump through the replay connection, such that GAPIS knows the replay has failed.
+         // In any case, do NOT fail silently, otherwise GAPIS may hang. In other words,
+         // the only place where this lambda can do a clean return is when it detects that
+         // there are no more requests to process, any other circumstance where we want to
+         // stop should lead to GAPID_FATAL.
+
+        std::unique_ptr<CrashUploader> crash_uploader =
+            std::unique_ptr<CrashUploader>(
+                new CrashUploader(*crashHandler, replayConn));
+
         std::unique_ptr<ResourceLoader> resLoader;
         if (cache == nullptr) {
           resLoader = PassThroughResourceLoader::create(replayConn);
@@ -333,16 +348,10 @@ std::unique_ptr<Server> Setup(const char* uri, const char* authToken,
               cache, PassThroughResourceLoader::create(replayConn));
         }
 
-        std::unique_ptr<CrashUploader> crash_uploader =
-            std::unique_ptr<CrashUploader>(
-                new CrashUploader(*crashHandler, replayConn));
-
         std::unique_ptr<Context> context =
             Context::create(replayConn, *crashHandler, resLoader.get(), memMgr);
-
         if (context == nullptr) {
-          GAPID_ERROR("Loading Context failed!");
-          return;
+          GAPID_FATAL("Loading Context failed!");
         }
 
         auto cleanup_state = [&](bool isPrewarm) {
@@ -396,9 +405,11 @@ std::unique_ptr<Server> Setup(const char* uri, const char* authToken,
           return true;
         };
 
+        // Loop on getting and processing replay requests
         do {
           auto req = replayConn->getReplayRequest();
           if (!req) {
+            // This is the only place where the ReplayHandler can do a clean exit
             GAPID_INFO("No more requests!");
             break;
           }
@@ -420,8 +431,7 @@ std::unique_ptr<Server> Setup(const char* uri, const char* authToken,
               if (context->initialize(req->replay().replay_id())) {
                 GAPID_INFO("Replay context initialized successfully");
               } else {
-                GAPID_ERROR("Replay context initialization failed");
-                continue;
+                GAPID_FATAL("Replay context initialization failed");
               }
               if (cache != nullptr) {
                 context->prefetch(cache);
@@ -432,7 +442,7 @@ std::unique_ptr<Server> Setup(const char* uri, const char* authToken,
               GAPID_INFO("Replay %s", ok ? "finished successfully" : "failed");
               replayConn->sendReplayFinished();
               if (!context->cleanup()) {
-                return;
+                GAPID_FATAL("Context cleanup failed");
               }
               prewarm->current_state = "";
               if (prewarm->prewarm_service && !prewarm->prewarm_id.empty() &&
@@ -454,20 +464,20 @@ std::unique_ptr<Server> Setup(const char* uri, const char* authToken,
               }
               if (prewarm->current_state != "") {
                 if (!cleanup_state(true)) {
-                  GAPID_ERROR(
+                  GAPID_FATAL(
                       "Could not clean up after previous replay, in a bad "
                       "state now");
-                  return;
                 }
               }
               if (!prime_state(std::move(req->prewarm().prerun_id()),
                                std::move(req->prewarm().cleanup_id()), true)) {
-                GAPID_ERROR("Could not prime state: in a bad state now");
-                return;
+                GAPID_FATAL("Could not prime state: in a bad state now");
               }
               break;
             }
-            default: { break; }
+            default: {
+              GAPID_FATAL("Unknown replay request type");
+            }
           }
         } while (true);
       });
