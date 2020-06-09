@@ -292,6 +292,7 @@ func newADB(ctx context.Context, d adb.Device, abi *device.ABI, launchArgs []str
 		return nil, err
 	}
 
+	// Set up port forwarding from a local port to the unix file socket on device.
 	log.I(ctx, "Setting up port forwarding...")
 	localPort, err := adb.LocalFreeTCPPort()
 	if err != nil {
@@ -336,11 +337,13 @@ func newADB(ctx context.Context, d adb.Device, abi *device.ABI, launchArgs []str
 	}
 	log.I(ctx, "Gapir socket: '%v' is opened now", socketPath)
 
+	log.I(ctx, "Setting up port forwarding: %v %v", localPort, socketPath)
 	if err := d.Forward(ctx, localPort, adb.NamedFileSystemSocket(socketPath)); err != nil {
 		return nil, log.Err(ctx, err, "Forwarding port")
 	}
 
 	cleanupFunc := func() {
+		log.E(ctx, "HUG: cleanup will remove port fwd")
 		cleanup.Invoke(ctx)
 		d.RemoveForward(ctx, localPort)
 	}

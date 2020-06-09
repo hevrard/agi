@@ -262,9 +262,29 @@ replay stream (and their size). Upon receiving the header, GAPIR can check which
 of the resources it already has in its cache, and request the resource data for
 those that are missing.
 
+## GAPIS and GAPIR interaction
+
+GAPIS and GAPIR interact via [gRPC], using the service defined in
+`gapir/replay_service/service.proto`, where GAPIR is the server and GAPIS its
+client. GAPIS can request some replay to be performed, and get some results.
+
+### Error handling
+
+Replayer has an VM error: 
+
+Replayer crash: breakpad
+
+Connection is lost: replayer terminates, server fails, restart the replayer
+
+Replay is taking too long: todo
+
+GAPIR uses [breakpad] to produce crash reports.
+
 
 [Neko]:                   http://nekovm.org/
 [Lua]:                    http://www.lua.org/
 [Parrot]:                 http://www.parrot.org/
 [glGetString]:            https://www.khronos.org/registry/OpenGL-Refpages/es3/html/glGetString.xhtml
 [glMapBufferRange]:       https://www.khronos.org/registry/OpenGL-Refpages/es3/html/glMapBufferRange.xhtml
+[gRPC]:                   https://grpc.io
+[breakpad]:               https://chromium.googlesource.com/breakpad/breakpad/+/master/docs/getting_started_with_breakpad.md

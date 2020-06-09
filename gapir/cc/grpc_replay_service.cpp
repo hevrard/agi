@@ -168,6 +168,7 @@ bool GrpcReplayService::sendErrorMsg(uint64_t seq_num, uint32_t severity,
                                      uint32_t api_index, uint64_t label,
                                      const std::string& msg, const void* data,
                                      uint32_t data_size) {
+  GAPID_ERROR("HUG enter sendErrorMsg");
   using severity::Severity;
   const Severity log_levels[] = {
       Severity::FatalLevel, Severity::ErrorLevel, Severity::WarningLevel,
@@ -188,7 +189,10 @@ bool GrpcReplayService::sendErrorMsg(uint64_t seq_num, uint32_t severity,
   error_msg->set_label(label);
   error_msg->set_msg(msg);
   error_msg->set_data(data, data_size);
-  return mGrpcStream->Write(res);
+  GAPID_ERROR("HUG write to stream");
+  bool hug = mGrpcStream->Write(res);
+  GAPID_ERROR("HUG stream written: %s", hug ? "OK" : "fail")
+  return hug;
 }
 
 bool GrpcReplayService::sendReplayStatus(uint64_t label, uint32_t total_instrs,

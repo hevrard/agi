@@ -226,38 +226,46 @@ func (c *connection) HandleReplayCommunication(
 		if c.stream == nil {
 			return log.Errf(ctx, nil, "Replay stream connection lost")
 		}
+		log.E(ctx, "HUG: c.stream.Recv()")
 		r, err := c.stream.Recv()
 		if err != nil {
 			return log.Errf(ctx, err, "Recv")
 		}
 		switch r.Res.(type) {
 		case *replaysrv.ReplayResponse_PayloadRequest:
+			log.E(ctx, "HUG: PayloadRequest")
 			if err := handler.HandlePayloadRequest(ctx, r.GetPayloadRequest().GetPayloadId()); err != nil {
 				return log.Errf(ctx, err, "Handling replay payload request")
 			}
 		case *replaysrv.ReplayResponse_ResourceRequest:
+			log.E(ctx, "HUG: ResourceRequest")
 			if err := handler.HandleResourceRequest(ctx, r.GetResourceRequest()); err != nil {
 				return log.Errf(ctx, err, "Handling replay resource request")
 			}
 		case *replaysrv.ReplayResponse_CrashDump:
+			log.E(ctx, "HUG: CrashDump")
 			if err := handler.HandleCrashDump(ctx, r.GetCrashDump()); err != nil {
 				return log.Errf(ctx, err, "Handling replay crash dump")
 			}
 			// No valid replay response after crash dump.
 			return fmt.Errorf("Replay crash")
 		case *replaysrv.ReplayResponse_PostData:
+			log.E(ctx, "HUG: PostData")
 			if err := handler.HandlePostData(ctx, r.GetPostData()); err != nil {
 				return log.Errf(ctx, err, "Handling post data")
 			}
 		case *replaysrv.ReplayResponse_Notification:
+			log.E(ctx, "HUG: Notification")
 			if err := handler.HandleNotification(ctx, r.GetNotification()); err != nil {
 				return log.Errf(ctx, err, "Handling notification")
 			}
 		case *replaysrv.ReplayResponse_Finished:
+			log.E(ctx, "HUG: Finished")
 			if err := handler.HandleFinished(ctx, nil); err != nil {
 				return log.Errf(ctx, err, "Handling finished")
 			}
 		case *replaysrv.ReplayResponse_FenceReadyRequest:
+			log.E(ctx, "HUG: FenceReadyRequest")
 			if err := handler.HandleFenceReadyRequest(ctx, r.GetFenceReadyRequest()); err != nil {
 				return log.Errf(ctx, err, "Handling replay fence ready request")
 			}

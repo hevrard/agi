@@ -38,7 +38,8 @@ const (
 	// line arguments when launching GAPIR. The property must be of type []string.
 	LaunchArgsKey     tyLaunchArgsKey = "gapir-launch-args"
 	connectTimeout                    = time.Second * 10
-	heartbeatInterval                 = time.Millisecond * 500
+	heartbeatInterval                 = time.Second * 2
+	// heartbeatInterval = time.Millisecond * 500
 )
 
 type clientInfo struct {
@@ -205,6 +206,7 @@ func (client *Client) ping(ctx context.Context, connection gapir.Connection) (ti
 }
 
 func (client *Client) heartbeat(ctx context.Context, pingInterval time.Duration, key ConnectionKey) {
+	//time.Sleep(time.Second * 10)
 	for {
 		select {
 		case <-task.ShouldStop(ctx):
@@ -213,6 +215,7 @@ func (client *Client) heartbeat(ctx context.Context, pingInterval time.Duration,
 			_, err := client.ping(ctx, client.clientInfos[key].connection)
 			if err != nil {
 				log.E(ctx, "Error sending keep-alive ping. Error: %v", err)
+				//time.Sleep(time.Second * 20)
 				client.reconnect(ctx, key)
 				return
 			}

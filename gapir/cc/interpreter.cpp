@@ -22,6 +22,8 @@
 
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
+#include <thread>
+#include <chrono>
 
 #if !defined(_MSC_VER) || defined(__GNUC__)
 // If compiling with MSVC, (rather than MSYS)
@@ -156,9 +158,11 @@ bool Interpreter::run(const uint32_t* instructions, uint32_t count) {
 
 void Interpreter::exec() {
   for (; mCurrentInstruction < mInstructionCount; mCurrentInstruction++) {
+    // GAPID_WARNING("HUG sleep 1");
+    // std::this_thread::sleep_for (std::chrono::seconds(1));
     switch (interpret(mInstructions[mCurrentInstruction])) {
       case SUCCESS:
-        break;
+        //break;
       case ERROR:
         GAPID_WARNING(
             "Interpreter stopped because of an interpretation error at opcode "

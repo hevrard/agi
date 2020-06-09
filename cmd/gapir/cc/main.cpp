@@ -766,8 +766,10 @@ void android_main(struct android_app* app) {
         Setup(uri.c_str(), opts.authToken.c_str(), cache.get(),
               opts.idleTimeoutSec, &crashHandler, &memoryManager, &data, &lock);
     waiting_thread = std::thread([&]() {
+      GAPID_ERROR("HUG server.get()->wait()")
       server.get()->wait();
       thread_is_done = true;
+      GAPID_ERROR("HUG thread_is_done")
     });
     if (chmod(socket_file_path.c_str(),
               S_IRUSR | S_IWUSR | S_IROTH | S_IWOTH)) {
@@ -803,6 +805,7 @@ void android_main(struct android_app* app) {
     }
 
     if (thread_is_done && !finishing) {
+      GAPID_ERROR("HUG start app termination");
       // Start termination of the app
       ANativeActivity_finish(app->activity);
 

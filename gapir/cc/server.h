@@ -109,7 +109,9 @@ class Server {
                                                 ReplayHandler handleReplay);
 
   ~Server() {
+    GAPID_ERROR("HUG: ~Server")
     if (mIdleTimeoutCloser != nullptr) {
+      GAPID_ERROR("HUG: ~Server mIdleTimeoutCloser->join()")
       mIdleTimeoutCloser->join();
     }
   };
