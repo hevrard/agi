@@ -214,11 +214,15 @@ public class StatusWatcher {
     private int executing = 0;
     private long doneInstr = 0;
     private long totalInstr = 0;
+    private boolean connectionLost = false;
 
     public ReplaySummary() {
     }
 
     public synchronized String getSummary() {
+      if (connectionLost) {
+        return "ERROR: connection lost!";
+      }
       StringBuilder sb = new StringBuilder();
       String sep = "";
       if (queued > 0) {
@@ -241,8 +245,9 @@ public class StatusWatcher {
     public synchronized boolean update(Service.ReplayUpdate update) {
       Replay replay = replays.get(update.getReplayId());
       if (replay == null) {
-        if (update.getStatus() == Service.ReplayStatus.REPLAY_FINISHED) {
-          // Got a replay finished message for a replay we've not seen before. Just ignore it.
+        if (update.getStatus() == Service.ReplayStatus.REPLAY_FINISHED ||
+            update.getStatus() == Service.ReplayStatus.REPLAY_CONNECTION_LOST) {
+          // Got a replay finished/lost message for a replay we've not seen before. Just ignore it.
           return false;
         }
         replay = new Replay(update);
@@ -277,6 +282,9 @@ public class StatusWatcher {
             case REPLAY_FINISHED:
               queued--;
               return finished(replay);
+            case REPLAY_CONNECTION_LOST:
+              queued--;
+              return connection_lost(replay);
             default:
               return false;
           }
@@ -288,6 +296,9 @@ public class StatusWatcher {
             case REPLAY_FINISHED:
               started--;
               return finished(replay);
+            case REPLAY_CONNECTION_LOST:
+              started--;
+              return connection_lost(replay);
             default:
               return false;
           }
@@ -298,6 +309,9 @@ public class StatusWatcher {
             case REPLAY_FINISHED:
               executing--;
               return finished(replay);
+            case REPLAY_CONNECTION_LOST:
+              executing--;
+              return connection_lost(replay);
             default:
               return false;
           }
@@ -336,6 +350,14 @@ public class StatusWatcher {
       }
       // TODO: we should clean these out after some time.
       replay.status = Service.ReplayStatus.REPLAY_FINISHED;
+      return true;
+    }
+
+    private boolean connection_lost(Replay replay) {
+      // HUGUES
+      doneInstr = 0;
+      totalInstr = 0;
+      replay.status = Service.ReplayStatus.REPLAY_CONNECTION_LOST;
       return true;
     }
 
