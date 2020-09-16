@@ -157,9 +157,14 @@ sub ref!ApplicationInfo readVkApplicationInfo(const VkApplicationInfo* applicati
   object.EngineVersion = info.engineVersion
   object.ApiVersion = info.apiVersion
 
+
   if info.pApplicationName != null {
     object.ApplicationName = as!string(info.pApplicationName)
+    print("HUGUES Application Name:@%s@", object.ApplicationName)
+  } else {
+    print("HUGUES Application Name is NULL")
   }
+
   if info.pEngineName != null {
     object.EngineName = as!string(info.pEngineName)
   }
