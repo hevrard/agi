@@ -687,7 +687,7 @@ service Gapid {
       returns (TraceTargetTreeNodeResponse) {
   }
 
-  // Trace returns a steam that can be used to start and stop
+  // Trace returns a stream that can be used to start and stop
   // a trace
   rpc Trace(stream TraceRequest) returns (stream TraceResponse) {
   }
