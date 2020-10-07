@@ -391,8 +391,7 @@ func (s *server) GetFramegraph(ctx context.Context, p *path.Capture) (*service.F
 	defer status.Finish(ctx)
 	ctx = log.Enter(ctx, "GetFramegraph")
 
-	// TODO HUGUES
-	framegraphData, err := &service.FramegraphData{}, error(nil)
+	framegraphData, err := resolve.GetFramegraph(ctx, p)
 	if err != nil {
 		return nil, err
 	}
