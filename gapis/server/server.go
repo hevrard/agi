@@ -386,6 +386,19 @@ func (s *server) GetGraphVisualization(ctx context.Context, p *path.Capture, for
 	return graphVisualization, nil
 }
 
+func (s *server) GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphData, error) {
+	ctx = status.Start(ctx, "RPC GetFramegraph")
+	defer status.Finish(ctx)
+	ctx = log.Enter(ctx, "GetFramegraph")
+
+	// TODO HUGUES
+	framegraphData, err := &service.FramegraphData{}, error(nil)
+	if err != nil {
+		return nil, err
+	}
+	return framegraphData, nil
+}
+
 func (s *server) GetDevices(ctx context.Context) ([]*path.Device, error) {
 	ctx = status.Start(ctx, "RPC GetDevices")
 	defer status.Finish(ctx)

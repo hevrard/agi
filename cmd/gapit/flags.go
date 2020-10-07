@@ -434,6 +434,10 @@ type (
 		Format string `help:"output format of the graph: 'pbtxt' (Tensorboard) or 'dot' (Graphviz)"`
 	}
 
+	FramegraphFlags struct {
+		Gapis GapisFlags
+	}
+
 	SmokeTestsFlags struct {
 	}
 

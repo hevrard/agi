@@ -393,6 +393,30 @@ message GraphVisualizationResponse {
   }
 }
 
+// Framegraph
+message FramegraphNode {
+  uint64 id = 1;
+  string text = 2;
+}
+message FramegraphEdge {
+  uint64 origin = 1;
+  uint64 destination = 2;
+}
+message FramegraphData {
+  repeated FramegraphNode nodes = 1;
+  repeated FramegraphEdge edges = 2;
+}
+message FramegraphRequest {
+  path.Capture capture = 1;
+}
+message FramegraphResponse {
+  oneof res {
+    FramegraphData framegraphData = 1;
+    Error error = 2;
+  }
+}
+
+
 message GetDevicesRequest {
 }
 message GetDevicesResponse {
@@ -645,6 +669,11 @@ service Gapid {
   rpc GetGraphVisualization(GraphVisualizationRequest)
       returns (GraphVisualizationResponse) {
   }
+
+  // GetFramegraph returns the framegraph of the requested capture.
+  rpc GetFramegraph(FramegraphRequest) returns (FramegraphResponse) {
+  }
+
   // GetDevices returns the full list of replay devices avaliable to the server.
   // These include local replay devices and any connected Android devices.
   // This list may change over time, as devices are connected and disconnected.
