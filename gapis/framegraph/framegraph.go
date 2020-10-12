@@ -16,6 +16,7 @@ package framegraph
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/gapid/core/log"
 	"github.com/google/gapid/gapis/api"
@@ -28,6 +29,10 @@ import (
 // type rp {
 // 	consume []uint64
 // 	produce []uint64
+// }
+
+// type renderpass {
+// 	fbDim string
 // }
 
 // GetFramegraph creates the framegraph
@@ -65,14 +70,22 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphDat
 						case vulkan.VkCmdBeginRenderPassArgsʳ:
 							rp := ar.RenderPass()
 							rpo := st.RenderPasses().Get(rp)
-							log.W(ctx, "HUGUES renderpassobject: %v", rpo)
+
+							fb := ar.Framebuffer()
+							fbo := st.Framebuffers().Get(fb)
+
+							txt := fmt.Sprintf("RP: %v (FB: %v)", rpo.VulkanHandle(), fbo.VulkanHandle())
+
+							nodes = append(nodes, &service.FramegraphNode{
+								Id:   nodeId,
+								Text: txt,
+							})
+							nodeId++
+
 							for i := uint32(0); i < uint32(rpo.AttachmentDescriptions().Len()); i++ {
 								attachment := rpo.AttachmentDescriptions().Get(i)
 								log.W(ctx, "HUGUES attachment loadop: %v", attachment.LoadOp())
 								log.W(ctx, "HUGUES attachment storeop: %v", attachment.StoreOp())
-
-								nodes = append(nodes, &service.FramegraphNode{Id: nodeId, Text: "att"})
-								nodeId++
 
 							}
 						}
