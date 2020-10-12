@@ -26,14 +26,11 @@ import (
 	"github.com/google/gapid/gapis/service/path"
 )
 
-// type rp {
-// 	consume []uint64
-// 	produce []uint64
-// }
-
-// type renderpass {
-// 	fbDim string
-// }
+type renderpass struct {
+	text    string
+	consume []uint64
+	produce []uint64
+}
 
 // GetFramegraph creates the framegraph
 func GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphData, error) {
@@ -44,10 +41,7 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphDat
 
 	state := c.NewState(ctx)
 
-	nodes := []*service.FramegraphNode{}
-	nodeId := uint64(0)
-
-	//rps := []*rp{}
+	renderpasses := []*renderpass{}
 
 	mutate := func(ctx context.Context, id api.CmdID, cmd api.Cmd) error {
 		err := cmd.Mutate(ctx, id, state, nil, nil)
@@ -77,20 +71,37 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphDat
 							fbWidth := fbo.Width()
 							fbHeight := fbo.Height()
 
-							txt := fmt.Sprintf("RP: %v (FB: %v [%v x %v])", rpo.VulkanHandle(), fbo.VulkanHandle(), fbWidth, fbHeight)
+							fbImgs := fbo.ImageAttachments()
 
-							nodes = append(nodes, &service.FramegraphNode{
-								Id:   nodeId,
-								Text: txt,
-							})
-							nodeId++
+							rpID := rpo.VulkanHandle()
+
+							text := fmt.Sprintf("RP: %v [%v x %v])", rpID, fbWidth, fbHeight)
+							consume := []uint64{}
+							produce := []uint64{}
 
 							for i := uint32(0); i < uint32(rpo.AttachmentDescriptions().Len()); i++ {
+								if i >= uint32(fbImgs.Len()) {
+									break
+								}
 								attachment := rpo.AttachmentDescriptions().Get(i)
-								log.W(ctx, "HUGUES attachment loadop: %v", attachment.LoadOp())
-								log.W(ctx, "HUGUES attachment storeop: %v", attachment.StoreOp())
+								attImg := fbImgs.Get(i).Image().VulkanHandle()
+								if attachment.LoadOp() == vulkan.VkAttachmentLoadOp_VK_ATTACHMENT_LOAD_OP_LOAD {
+									log.W(ctx, "HUGUES %v consume: %v", rpID, attImg)
+									consume = append(consume, uint64(attImg))
+								}
+								if attachment.StoreOp() == vulkan.VkAttachmentStoreOp_VK_ATTACHMENT_STORE_OP_STORE {
+									log.W(ctx, "HUGUES %v produce: %v", rpID, attImg)
+									produce = append(produce, uint64(attImg))
+								}
 
 							}
+
+							renderpasses = append(renderpasses, &renderpass{
+								text:    text,
+								consume: consume,
+								produce: produce,
+							})
+
 						}
 					}
 				}
@@ -105,5 +116,36 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphDat
 		return nil, err
 	}
 
-	return &service.FramegraphData{Nodes: nodes}, nil
+	// Construct graph
+
+	imgProd := map[uint64]int{}
+	imgCons := map[uint64]int{}
+
+	nodes := []*service.FramegraphNode{}
+
+	for i, rp := range renderpasses {
+		for _, img := range rp.consume {
+			imgCons[img] = i
+		}
+		for _, img := range rp.produce {
+			imgProd[img] = i
+		}
+		nodes = append(nodes, &service.FramegraphNode{
+			Id:   uint64(i),
+			Text: rp.text,
+		})
+	}
+
+	edges := []*service.FramegraphEdge{}
+
+	for img, rpCons := range imgCons {
+		if rpProd, ok := imgProd[img]; ok {
+			edges = append(edges, &service.FramegraphEdge{
+				Origin:      uint64(rpProd),
+				Destination: uint64(rpCons),
+			})
+		}
+	}
+
+	return &service.FramegraphData{Nodes: nodes, Edges: edges}, nil
 }
