@@ -45,6 +45,7 @@ import (
 	"github.com/google/gapid/core/os/file"
 	"github.com/google/gapid/gapis/capture"
 	"github.com/google/gapid/gapis/config"
+	"github.com/google/gapid/gapis/framegraph"
 	"github.com/google/gapid/gapis/messages"
 	perfetto "github.com/google/gapid/gapis/perfetto/service"
 	"github.com/google/gapid/gapis/replay"
@@ -391,7 +392,7 @@ func (s *server) GetFramegraph(ctx context.Context, p *path.Capture) (*service.F
 	defer status.Finish(ctx)
 	ctx = log.Enter(ctx, "GetFramegraph")
 
-	framegraphData, err := resolve.GetFramegraph(ctx, p)
+	framegraphData, err := framegraph.GetFramegraph(ctx, p)
 	if err != nil {
 		return nil, err
 	}
