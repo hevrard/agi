@@ -17,6 +17,8 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
+	"os"
 
 	"github.com/google/gapid/core/app"
 	"github.com/google/gapid/core/log"
@@ -53,6 +55,33 @@ func (verb *framegraphVerb) Run(ctx context.Context, flags flag.FlagSet) error {
 	}
 
 	log.I(ctx, "HUGUES got framegraph: %+v", framegraph)
+
+	// Print framegraph in DOT format
+	dot := "digraph hugues {\n"
+	for _, node := range framegraph.Nodes {
+		dot += fmt.Sprintf("  n%v [label=\"%s\"];\n", node.Id, node.Text)
+	}
+	dot += "\n"
+	for _, edge := range framegraph.Edges {
+		dot += fmt.Sprintf("  n%v -> n%v;\n", edge.Origin, edge.Destination)
+	}
+	dot += "}\n"
+
+	filePath := verb.Out
+	if filePath == "" {
+		filePath = "framegraph.dot"
+	}
+
+	file, err := os.Create(filePath)
+	if err != nil {
+		return log.Errf(ctx, err, "Creating file (%v)", filePath)
+	}
+	defer file.Close()
+
+	bytesWritten, err := fmt.Fprint(file, dot)
+	if err != nil {
+		return log.Errf(ctx, err, "Error after writing %d bytes to file", bytesWritten)
+	}
 
 	return nil
 }

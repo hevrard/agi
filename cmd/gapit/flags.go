@@ -436,6 +436,7 @@ type (
 
 	FramegraphFlags struct {
 		Gapis GapisFlags
+		Out   string `help:"path to save framegraph DOT file"`
 	}
 
 	SmokeTestsFlags struct {
