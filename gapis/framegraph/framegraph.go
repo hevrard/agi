@@ -74,7 +74,10 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphDat
 							fb := ar.Framebuffer()
 							fbo := st.Framebuffers().Get(fb)
 
-							txt := fmt.Sprintf("RP: %v (FB: %v)", rpo.VulkanHandle(), fbo.VulkanHandle())
+							fbWidth := fbo.Width()
+							fbHeight := fbo.Height()
+
+							txt := fmt.Sprintf("RP: %v (FB: %v [%v x %v])", rpo.VulkanHandle(), fbo.VulkanHandle(), fbWidth, fbHeight)
 
 							nodes = append(nodes, &service.FramegraphNode{
 								Id:   nodeId,
