@@ -19,6 +19,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/google/gapid/core/app"
 	"github.com/google/gapid/core/log"
@@ -82,6 +83,9 @@ func (verb *framegraphVerb) Run(ctx context.Context, flags flag.FlagSet) error {
 	if err != nil {
 		return log.Errf(ctx, err, "Error after writing %d bytes to file", bytesWritten)
 	}
+
+	// HUGUES: sleep to let the gapis log being printed
+	time.Sleep(1 * time.Second)
 
 	return nil
 }

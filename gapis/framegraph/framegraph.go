@@ -32,6 +32,18 @@ type renderpass struct {
 	produce []uint64
 }
 
+const (
+	kindRenderpass = iota
+	kindCompute
+)
+
+type workload struct {
+	kind  int
+	text  string
+	read  []uint64
+	write []uint64
+}
+
 // GetFramegraph creates the framegraph
 func GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphData, error) {
 	c, err := capture.ResolveGraphicsFromPath(ctx, p)
@@ -41,7 +53,7 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphDat
 
 	state := c.NewState(ctx)
 
-	renderpasses := []*renderpass{}
+	workloads := []*workload{}
 
 	mutate := func(ctx context.Context, id api.CmdID, cmd api.Cmd) error {
 		err := cmd.Mutate(ctx, id, state, nil, nil)
@@ -49,6 +61,14 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphDat
 			return err
 		}
 
+		// API-specific things start here.
+
+		// Assume:
+		// - single queue
+		// - renderpasses only, in order
+		// - only interact with images
+		var currentRP *workload = nil
+		currentReadableImg := map[uint64]bool{}
 		if queueSubmit, ok := cmd.(*vulkan.VkQueueSubmit); ok {
 			st := vulkan.GetState(state)
 			layout := state.MemoryLayout
@@ -61,9 +81,12 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphDat
 						cr := commandBuffer.CommandReferences().Get(uint32(i))
 						args := vulkan.GetCommandArgs(ctx, cr, st)
 						switch ar := args.(type) {
+
 						case vulkan.VkCmdBeginRenderPassArgsʳ:
+							// BeginRenderPass has info about framebuffer and attachments
 							rp := ar.RenderPass()
 							rpo := st.RenderPasses().Get(rp)
+							rpID := rpo.VulkanHandle()
 
 							fb := ar.Framebuffer()
 							fbo := st.Framebuffers().Get(fb)
@@ -73,9 +96,7 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphDat
 
 							fbImgs := fbo.ImageAttachments()
 
-							rpID := rpo.VulkanHandle()
-
-							text := fmt.Sprintf("RP: %v [%v x %v])", rpID, fbWidth, fbHeight)
+							text := fmt.Sprintf("RP:%v [%vx%v])", rpID, fbWidth, fbHeight)
 							consume := []uint64{}
 							produce := []uint64{}
 
@@ -96,12 +117,54 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphDat
 
 							}
 
-							renderpasses = append(renderpasses, &renderpass{
-								text:    text,
-								consume: consume,
-								produce: produce,
-							})
+							currentRP = &workload{
+								kind:  kindRenderpass,
+								text:  text,
+								read:  consume,
+								write: produce,
+							}
 
+							workloads = append(workloads, currentRP)
+
+						case vulkan.VkCmdBindDescriptorSetsArgsʳ:
+
+							currentReadableImg = map[uint64]bool{}
+							descriptorSets := ar.DescriptorSets()
+
+							for i := 0; i < descriptorSets.Len(); i++ {
+								dsIdx := descriptorSets.Get(uint32(i))
+								ds := st.DescriptorSets().Get(dsIdx)
+								log.W(ctx, "HUGUES descrset: %v", ds)
+
+								dsBindings := ds.Bindings()
+								log.W(ctx, "HUGUES bindings: %v, len: %v", dsBindings, dsBindings.Len())
+
+								for j := 0; j < dsBindings.Len(); j++ {
+									dsb := dsBindings.Get(uint32(j))
+									log.W(ctx, "HUGUES dsb: %v type: %v", dsb, dsb.BindingType())
+									if dsb.BindingType() == vulkan.VkDescriptorType_VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER {
+										imgBindings := dsb.ImageBinding()
+										log.W(ctx, "HUGUES imgBinding: %v len: %v", imgBindings, imgBindings.Len())
+										for k := 0; k < imgBindings.Len(); k++ {
+											dii := imgBindings.Get(uint32(k))
+											imgViewIdx := dii.ImageView()
+											log.W(ctx, "HUGUES dii: %v imgView: %v", dii, imgViewIdx)
+											imgView := st.ImageViews().Get(imgViewIdx)
+											imgObj := imgView.Image()
+											imgHandle := imgObj.VulkanHandle()
+											log.W(ctx, "HUGUES READ img: %v", imgHandle)
+											currentReadableImg[uint64(imgHandle)] = true
+										}
+									}
+								}
+							}
+
+						case vulkan.VkCmdDrawIndexedArgsʳ:
+							log.W(ctx, "HUGUES drawcmdindexed, indexcount: %v", ar.IndexCount())
+							for k := range currentReadableImg {
+								log.W(ctx, "HUGUES DRAW reads: %v", k)
+								currentRP.read = append(currentRP.read, k)
+							}
 						}
 					}
 				}
@@ -116,6 +179,14 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphDat
 		return nil, err
 	}
 
+	// Update node labels with read/write info
+	for _, w := range workloads {
+		w.text += "\\nRead:"
+		w.text += fmt.Sprintf("%v", w.read)
+		w.text += "\\nWrite:"
+		w.text += fmt.Sprintf("%v", w.write)
+	}
+
 	// Construct graph
 
 	imgProd := map[uint64]int{}
@@ -123,21 +194,20 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphDat
 
 	nodes := []*service.FramegraphNode{}
 
-	for i, rp := range renderpasses {
-		for _, img := range rp.consume {
+	for i, w := range workloads {
+		for _, img := range w.read {
 			imgCons[img] = i
 		}
-		for _, img := range rp.produce {
+		for _, img := range w.write {
 			imgProd[img] = i
 		}
 		nodes = append(nodes, &service.FramegraphNode{
 			Id:   uint64(i),
-			Text: rp.text,
+			Text: w.text,
 		})
 	}
 
 	edges := []*service.FramegraphEdge{}
-
 	for img, rpCons := range imgCons {
 		if rpProd, ok := imgProd[img]; ok {
 			edges = append(edges, &service.FramegraphEdge{
