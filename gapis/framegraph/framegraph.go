@@ -40,8 +40,8 @@ const (
 type workload struct {
 	kind  int
 	text  string
-	read  []uint64
-	write []uint64
+	read  map[uint64]bool
+	write map[uint64]bool
 }
 
 // GetFramegraph creates the framegraph
@@ -96,9 +96,9 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphDat
 
 							fbImgs := fbo.ImageAttachments()
 
-							text := fmt.Sprintf("RP:%v [%vx%v])", rpID, fbWidth, fbHeight)
-							consume := []uint64{}
-							produce := []uint64{}
+							text := fmt.Sprintf("RP:%x [%vx%v]", rpID, fbWidth, fbHeight)
+							consume := map[uint64]bool{}
+							produce := map[uint64]bool{}
 
 							for i := uint32(0); i < uint32(rpo.AttachmentDescriptions().Len()); i++ {
 								if i >= uint32(fbImgs.Len()) {
@@ -108,11 +108,11 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphDat
 								attImg := fbImgs.Get(i).Image().VulkanHandle()
 								if attachment.LoadOp() == vulkan.VkAttachmentLoadOp_VK_ATTACHMENT_LOAD_OP_LOAD {
 									log.W(ctx, "HUGUES %v consume: %v", rpID, attImg)
-									consume = append(consume, uint64(attImg))
+									consume[uint64(attImg)] = true
 								}
 								if attachment.StoreOp() == vulkan.VkAttachmentStoreOp_VK_ATTACHMENT_STORE_OP_STORE {
 									log.W(ctx, "HUGUES %v produce: %v", rpID, attImg)
-									produce = append(produce, uint64(attImg))
+									produce[uint64(attImg)] = true
 								}
 
 							}
@@ -163,7 +163,7 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphDat
 							log.W(ctx, "HUGUES drawcmdindexed, indexcount: %v", ar.IndexCount())
 							for k := range currentReadableImg {
 								log.W(ctx, "HUGUES DRAW reads: %v", k)
-								currentRP.read = append(currentRP.read, k)
+								currentRP.read[k] = true
 							}
 						}
 					}
@@ -181,10 +181,14 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphDat
 
 	// Update node labels with read/write info
 	for _, w := range workloads {
-		w.text += "\\nRead:"
-		w.text += fmt.Sprintf("%v", w.read)
+		w.text += "\\nRead: "
+		for k := range w.read {
+			w.text += fmt.Sprintf(" %x", k)
+		}
 		w.text += "\\nWrite:"
-		w.text += fmt.Sprintf("%v", w.write)
+		for k := range w.write {
+			w.text += fmt.Sprintf(" %x", k)
+		}
 	}
 
 	// Construct graph
@@ -195,10 +199,10 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphDat
 	nodes := []*service.FramegraphNode{}
 
 	for i, w := range workloads {
-		for _, img := range w.read {
+		for img := range w.read {
 			imgCons[img] = i
 		}
-		for _, img := range w.write {
+		for img := range w.write {
 			imgProd[img] = i
 		}
 		nodes = append(nodes, &service.FramegraphNode{
