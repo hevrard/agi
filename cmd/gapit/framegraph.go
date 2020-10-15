@@ -60,7 +60,7 @@ func (verb *framegraphVerb) Run(ctx context.Context, flags flag.FlagSet) error {
 	// Print framegraph in DOT format
 	dot := "digraph hugues {\n"
 	for _, node := range framegraph.Nodes {
-		dot += fmt.Sprintf("  n%v [label=\"%s\"];\n", node.Id, node.Text)
+		dot += fmt.Sprintf("  n%v [label=\"%s\\n%s\"];\n", node.Id, node.Type, node.Text)
 	}
 	dot += "\n"
 	for _, edge := range framegraph.Edges {

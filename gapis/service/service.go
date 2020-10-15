@@ -25,7 +25,7 @@ import (
 	"github.com/google/gapid/core/image"
 	"github.com/google/gapid/core/log"
 	"github.com/google/gapid/core/os/device"
-	"github.com/google/gapid/gapis/api"
+	api "github.com/google/gapid/gapis/api"
 	"github.com/google/gapid/gapis/memory"
 	perfetto "github.com/google/gapid/gapis/perfetto/service"
 	"github.com/google/gapid/gapis/service/box"
@@ -90,7 +90,7 @@ type Service interface {
 
 	GetGraphVisualization(ctx context.Context, capture *path.Capture, format GraphFormat) ([]byte, error)
 
-	GetFramegraph(ctx context.Context, capture *path.Capture) (*FramegraphData, error)
+	GetFramegraph(ctx context.Context, capture *path.Capture) (*Framegraph, error)
 
 	// GetDevices returns the full list of replay devices available to the server.
 	// These include local replay devices and any connected Android devices.

@@ -507,3 +507,49 @@ message SparseBinding {
   // The offset into the buffer of the binding
   uint64 offset = 1;
 }
+
+// Framegraph
+
+// A resource is something that can be read/write
+// re-use e.g. BufferInfo and ImageInfo here?
+enum FramegraphResourceType {
+  BUFFER = 0;
+  IMAGE = 1;
+}
+message FramegraphResource {
+  uint64 id = 1;
+  FramegraphResourceType type = 2;
+  string text = 3;
+}
+// A node is basically a "workload",
+// something that reads/writes resources
+enum FramegraphNodeType {
+  COMPUTE = 0;
+  RENDERPASS = 1;
+  // SUBPASS
+  // CopyCmd
+}
+message FramegraphNode {
+  uint64 id = 1;
+  FramegraphNodeType type = 2;
+  string text = 3;
+  repeated FramegraphResource read = 4;
+  repeated FramegraphResource write = 5;
+}
+// An edge marks a dependency,
+// and can be caused by various reasons
+enum FramegraphEdgeType {
+  SEMAPHORE = 0;
+  FENCE = 1;
+  EVENT = 2;
+  PIPELINE_BARRIER = 3;
+  TIMELINE_SEMAPHORE = 4;
+  // SUBPASS IMAGE LAYOUT TRANSITION
+}
+// We probably need more info on edges, e.g.
+// a semaphore's vkHandle, etc
+message FramegraphEdge {
+  uint64 origin = 1;
+  uint64 destination = 2;
+  FramegraphEdgeType type = 3;
+}

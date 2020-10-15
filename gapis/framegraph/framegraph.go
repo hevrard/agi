@@ -71,7 +71,7 @@ type workload struct {
 }
 
 // GetFramegraph creates the framegraph
-func GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphData, error) {
+func GetFramegraph(ctx context.Context, p *path.Capture) (*service.Framegraph, error) {
 	c, err := capture.ResolveGraphicsFromPath(ctx, p)
 	if err != nil {
 		return nil, err
@@ -236,7 +236,7 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphDat
 	imgProd := map[uint64]int{}
 	imgCons := map[uint64]int{}
 
-	nodes := []*service.FramegraphNode{}
+	nodes := []*api.FramegraphNode{}
 
 	for i, w := range workloads {
 		for img := range w.read {
@@ -245,21 +245,22 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphDat
 		for img := range w.write {
 			imgProd[img] = i
 		}
-		nodes = append(nodes, &service.FramegraphNode{
+		nodes = append(nodes, &api.FramegraphNode{
 			Id:   uint64(i),
+			Type: api.FramegraphNodeType_RENDERPASS,
 			Text: w.text,
 		})
 	}
 
-	edges := []*service.FramegraphEdge{}
+	edges := []*api.FramegraphEdge{}
 	for img, rpCons := range imgCons {
 		if rpProd, ok := imgProd[img]; ok {
-			edges = append(edges, &service.FramegraphEdge{
+			edges = append(edges, &api.FramegraphEdge{
 				Origin:      uint64(rpProd),
 				Destination: uint64(rpCons),
 			})
 		}
 	}
 
-	return &service.FramegraphData{Nodes: nodes, Edges: edges}, nil
+	return &service.Framegraph{Nodes: nodes, Edges: edges}, nil
 }

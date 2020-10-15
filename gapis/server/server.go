@@ -387,16 +387,16 @@ func (s *server) GetGraphVisualization(ctx context.Context, p *path.Capture, for
 	return graphVisualization, nil
 }
 
-func (s *server) GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphData, error) {
+func (s *server) GetFramegraph(ctx context.Context, p *path.Capture) (*service.Framegraph, error) {
 	ctx = status.Start(ctx, "RPC GetFramegraph")
 	defer status.Finish(ctx)
 	ctx = log.Enter(ctx, "GetFramegraph")
 
-	framegraphData, err := framegraph.GetFramegraph(ctx, p)
+	framegraph, err := framegraph.GetFramegraph(ctx, p)
 	if err != nil {
 		return nil, err
 	}
-	return framegraphData, nil
+	return framegraph, nil
 }
 
 func (s *server) GetDevices(ctx context.Context) ([]*path.Device, error) {
