@@ -26,12 +26,38 @@ import (
 	"github.com/google/gapid/gapis/service/path"
 )
 
-type renderpass struct {
-	text    string
-	consume []uint64
-	produce []uint64
+// resource kind
+const (
+	resourceImage = iota
+	resourceBuffer
+)
+
+func fmtResourceKind(k int) string {
+	return []string{"img", "buf"}[k]
 }
 
+// resource access
+const (
+	accessStore = iota
+	accessLoad
+	accessCombinedImageSampler
+)
+
+func fmtResourceAccess(a int) string {
+	return []string{"store", "load", "combinedImageSampler"}[a]
+}
+
+type resource struct {
+	kind   int
+	id     uint64
+	access int
+}
+
+func (res resource) String() string {
+	return fmt.Sprintf("%s %x %s", fmtResourceKind(res.kind), res.id, fmtResourceAccess(res.access))
+}
+
+// workload kind
 const (
 	kindRenderpass = iota
 	kindCompute
@@ -54,6 +80,7 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphDat
 	state := c.NewState(ctx)
 
 	workloads := []*workload{}
+	resources := map[uint64]resource{}
 
 	mutate := func(ctx context.Context, id api.CmdID, cmd api.Cmd) error {
 		err := cmd.Mutate(ctx, id, state, nil, nil)
@@ -108,10 +135,20 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphDat
 								attImg := fbImgs.Get(i).Image().VulkanHandle()
 								if attachment.LoadOp() == vulkan.VkAttachmentLoadOp_VK_ATTACHMENT_LOAD_OP_LOAD {
 									log.W(ctx, "HUGUES %v consume: %v", rpID, attImg)
+									resources[uint64(attImg)] = resource{
+										kind:   resourceImage,
+										id:     uint64(attImg),
+										access: accessLoad,
+									}
 									consume[uint64(attImg)] = true
 								}
 								if attachment.StoreOp() == vulkan.VkAttachmentStoreOp_VK_ATTACHMENT_STORE_OP_STORE {
 									log.W(ctx, "HUGUES %v produce: %v", rpID, attImg)
+									resources[uint64(attImg)] = resource{
+										kind:   resourceImage,
+										id:     uint64(attImg),
+										access: accessStore,
+									}
 									produce[uint64(attImg)] = true
 								}
 
@@ -183,11 +220,11 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.FramegraphDat
 	for _, w := range workloads {
 		w.text += "\\nRead: "
 		for k := range w.read {
-			w.text += fmt.Sprintf(" %x", k)
+			w.text += fmt.Sprintf("|%v", resources[k])
 		}
 		w.text += "\\nWrite:"
 		for k := range w.write {
-			w.text += fmt.Sprintf(" %x", k)
+			w.text += fmt.Sprintf("|%v", resources[k])
 		}
 	}
 
