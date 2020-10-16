@@ -87,6 +87,9 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.Framegraph, e
 			return err
 		}
 
+		// there is a MutateWithSubcommands(), that takes a callback.
+		// This is where we could use lastDrawInfo().se
+
 		// API-specific things start here.
 
 		// Assume:
