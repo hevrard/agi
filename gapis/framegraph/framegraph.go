@@ -22,6 +22,7 @@ import (
 	"github.com/google/gapid/gapis/api"
 	"github.com/google/gapid/gapis/api/vulkan"
 	"github.com/google/gapid/gapis/capture"
+	d2 "github.com/google/gapid/gapis/resolve/dependencygraph2"
 	"github.com/google/gapid/gapis/service"
 	"github.com/google/gapid/gapis/service/path"
 )
@@ -71,7 +72,7 @@ type workload struct {
 }
 
 // GetFramegraph creates the framegraph
-func GetFramegraph(ctx context.Context, p *path.Capture) (*service.Framegraph, error) {
+func GetFramegraph2(ctx context.Context, p *path.Capture) (*service.Framegraph, error) {
 	c, err := capture.ResolveGraphicsFromPath(ctx, p)
 	if err != nil {
 		return nil, err
@@ -266,4 +267,37 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.Framegraph, e
 	}
 
 	return &service.Framegraph{Nodes: nodes, Edges: edges}, nil
+}
+
+func GetFramegraph(ctx context.Context, p *path.Capture) (*service.Framegraph, error) {
+
+	config := d2.DependencyGraphConfig{
+		SaveNodeAccesses:       true,
+		ReverseDependencies:    true,
+		IncludeInitialCommands: true,
+	}
+	dependencyGraph, err := d2.GetDependencyGraph(ctx, p, config)
+	if err != nil {
+		return nil, err
+	}
+
+	hug := func(nodeID d2.NodeID, node d2.Node) error {
+		switch node.(type) {
+		case d2.CmdNode:
+			log.W(ctx, "HUGUES CmdNode: %v", nodeID)
+		case d2.ObsNode:
+			log.W(ctx, "HUGUES ObsNode: %v", nodeID)
+		}
+
+		na := dependencyGraph.GetNodeAccesses(nodeID)
+		for _, ma := range na.MemoryAccesses {
+			log.W(ctx, "HUGUES %v pool: %v", ma.Mode, ma.Pool)
+		}
+
+		return nil
+	}
+
+	dependencyGraph.ForeachNode(hug)
+
+	return &service.Framegraph{}, nil
 }
