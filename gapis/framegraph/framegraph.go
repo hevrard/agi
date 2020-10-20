@@ -20,8 +20,11 @@ import (
 
 	"github.com/google/gapid/core/log"
 	"github.com/google/gapid/gapis/api"
+	"github.com/google/gapid/gapis/api/sync"
 	"github.com/google/gapid/gapis/api/vulkan"
 	"github.com/google/gapid/gapis/capture"
+	"github.com/google/gapid/gapis/memory"
+	"github.com/google/gapid/gapis/resolve"
 	d2 "github.com/google/gapid/gapis/resolve/dependencygraph2"
 	"github.com/google/gapid/gapis/service"
 	"github.com/google/gapid/gapis/service/path"
@@ -269,7 +272,7 @@ func GetFramegraph2(ctx context.Context, p *path.Capture) (*service.Framegraph, 
 	return &service.Framegraph{Nodes: nodes, Edges: edges}, nil
 }
 
-func GetFramegraph(ctx context.Context, p *path.Capture) (*service.Framegraph, error) {
+func GetFramegraph4(ctx context.Context, p *path.Capture) (*service.Framegraph, error) {
 
 	config := d2.DependencyGraphConfig{
 		SaveNodeAccesses:       true,
@@ -283,21 +286,252 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.Framegraph, e
 
 	hug := func(nodeID d2.NodeID, node d2.Node) error {
 		switch node.(type) {
+
 		case d2.CmdNode:
-			log.W(ctx, "HUGUES CmdNode: %v", nodeID)
+			cn := node.(d2.CmdNode)
+			log.W(ctx, "HUGUES CmdNode: %v, %v", nodeID, cn.Index)
+			// na := dependencyGraph.GetNodeAccesses(nodeID)
+			// for _, ma := range na.MemoryAccesses {
+			// 	log.W(ctx, "HUGUES %v pool: %v", ma.Mode, ma.Pool)
+			// }
+
 		case d2.ObsNode:
 			log.W(ctx, "HUGUES ObsNode: %v", nodeID)
 		}
 
 		na := dependencyGraph.GetNodeAccesses(nodeID)
-		for _, ma := range na.MemoryAccesses {
-			log.W(ctx, "HUGUES %v pool: %v", ma.Mode, ma.Pool)
+		// for _, ma := range na.MemoryAccesses {
+		// 	log.W(ctx, "HUGUES %v pool: %v", ma.Mode, ma.Pool)
+		// }
+		for _, fa := range na.FragmentAccesses {
+			log.W(ctx, "HUGUES FA: %v", fa)
+			if field, ok := fa.Fragment.(api.Field); ok {
+				log.W(ctx, "HUGUES FA Field class name: %v", field.ClassName())
+			}
+		}
+		// for _, fw := range na.ForwardAccesses {
+		// 	log.W(ctx, "HUGUES FwdA: %v", fw)
+		// }
+
+		return nil
+	}
+	//_ = hug
+	dependencyGraph.ForeachNode(hug)
+
+	hug2 := func(ctx context.Context, cmdID api.CmdID, cmd api.Cmd) error {
+		switch cmd.(type) {
+
+		case *vulkan.VkQueueSubmit:
+			log.W(ctx, "HUGUES ### cmdID: %v", cmdID)
+
+			nodeID := dependencyGraph.GetCmdNodeID(cmdID, []uint64{0, 0, 1})
+			node := dependencyGraph.GetNode(nodeID)
+			log.W(ctx, "HUGUES nodeID: %v, node: %v", nodeID, node)
+
+			switch node.(type) {
+
+			case d2.CmdNode:
+				cn := node.(d2.CmdNode)
+				log.W(ctx, "HUGUES CmdNode: %v, %v", nodeID, cn.Index)
+				na := dependencyGraph.GetNodeAccesses(nodeID)
+				for _, ma := range na.MemoryAccesses {
+					log.W(ctx, "HUGUES %v pool: %v", ma.Mode, ma.Pool)
+				}
+
+			case d2.ObsNode:
+				log.W(ctx, "HUGUES ObsNode: %v", nodeID)
+			}
+
 		}
 
 		return nil
 	}
 
-	dependencyGraph.ForeachNode(hug)
+	_ = hug2
+	//dependencyGraph.ForeachCmd(ctx, hug2)
 
 	return &service.Framegraph{}, nil
+}
+
+func GetFramegraph3(ctx context.Context, p *path.Capture) (*service.Framegraph, error) {
+	config := d2.DependencyGraphConfig{
+		SaveNodeAccesses:       true,
+		ReverseDependencies:    true,
+		IncludeInitialCommands: true,
+	}
+	dependencyGraph, err := d2.GetDependencyGraph(ctx, p, config)
+	if err != nil {
+		return nil, err
+	}
+
+	c, err := capture.ResolveGraphicsFromPath(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+
+	postCmdCb := func(s *api.GlobalState, subCmdIdx api.SubCmdIdx, cmd api.Cmd) {
+		//log.W(ctx, "HUGUES postCmdCb %v: %v", subCmdIdx, cmd)
+	}
+	preSubCmdCb := func(s *api.GlobalState, subCmdIdx api.SubCmdIdx, cmd api.Cmd) {
+		//log.W(ctx, "HUGUES preSubCmdCb %v: %v", subCmdIdx, cmd)
+	}
+
+	postSubCmdCb := func(s *api.GlobalState, subCmdIdx api.SubCmdIdx, cmd api.Cmd) {
+		log.W(ctx, "HUGUES postSubCmdCb %v: %v", subCmdIdx, cmd)
+		na := dependencyGraph.GetNodeAccesses(dependencyGraph.GetCmdNodeID(api.CmdID(subCmdIdx[0]), subCmdIdx[1:]))
+		mapping := pool2image(vulkan.GetState(s))
+		for _, ma := range na.MemoryAccesses {
+			log.W(ctx, "HUGUES %v pool: %v, images: %v", ma.Mode, ma.Pool, mapping[ma.Pool])
+		}
+	}
+	sync.MutateWithSubcommands(ctx, p, c.Commands, postCmdCb, preSubCmdCb, postSubCmdCb)
+
+	return &service.Framegraph{}, nil
+}
+
+func pool2image(s *vulkan.State) map[memory.PoolID]map[vulkan.VkImage]bool {
+	result := make(map[memory.PoolID]map[vulkan.VkImage]bool)
+	images := s.Images().All()
+	for handle, image := range images {
+		memInfos := image.PlaneMemoryInfo().All()
+		for _, memInfo := range memInfos {
+			pool := memInfo.BoundMemory().Data().Pool()
+			if _, ok := result[pool]; !ok {
+				result[pool] = make(map[vulkan.VkImage]bool)
+			}
+			result[pool][handle] = true
+		}
+	}
+	return result
+}
+
+// results: RP1 [12 0 0 34] reads: map[pool]uint64  -- pool -> number of bytes read/written
+type rpinfo struct {
+	beginCmdIdx api.SubCmdIdx
+	read        map[memory.PoolID]uint64
+	totalRead   uint64
+	write       map[memory.PoolID]uint64
+	totalWrite  uint64
+}
+
+func GetFramegraph(ctx context.Context, p *path.Capture) (*service.Framegraph, error) {
+
+	c, err := capture.ResolveGraphicsFromPath(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+
+	// main iteration uses dependency graph
+	// also use sync data to know what subcommands are
+
+	config := d2.DependencyGraphConfig{
+		SaveNodeAccesses:       true,
+		ReverseDependencies:    true,
+		IncludeInitialCommands: true,
+	}
+	dependencyGraph, err := d2.GetDependencyGraph(ctx, p, config)
+	if err != nil {
+		return nil, err
+	}
+
+	snc, err := resolve.SyncData(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+
+	vulkanAPI := api.Find(vulkan.ID)
+	vkSyncAPI := vulkanAPI.(sync.SynchronizedAPI)
+
+	rpinfos := []*rpinfo{}
+
+	process := func(ctx context.Context, id api.CmdID, cmd api.Cmd) error {
+		//log.W(ctx, "HUGUES cmd:%v %v", id, cmd)
+		if _, ok := cmd.(*vulkan.VkQueueSubmit); ok {
+			screfs, ok := snc.SubcommandReferences[id]
+			if !ok {
+				return log.Errf(ctx, nil, "no subcommands found for vkQueueSubmit")
+			}
+
+			var rpi *rpinfo
+			insideRP := false
+			for _, scref := range screfs {
+				genCmdID := scref.GeneratingCmd
+				var genCmd api.Cmd
+				if genCmdID == api.CmdNoID {
+					genCmd, err = vkSyncAPI.RecoverMidExecutionCommand(ctx, p, scref.MidExecutionCommandData)
+					if err != nil {
+						return err
+					}
+				} else {
+					genCmd = c.Commands[genCmdID]
+				}
+				if insideRP {
+
+					nodeID := dependencyGraph.GetCmdNodeID(id, scref.Index)
+					na := dependencyGraph.GetNodeAccesses(nodeID)
+					for _, ma := range na.MemoryAccesses {
+						count := ma.Span.End - ma.Span.Start
+						log.W(ctx, "HUGUES %v pool: %v count: %v", ma.Mode, ma.Pool, count)
+						switch ma.Mode {
+						case d2.ACCESS_READ:
+							rpi.totalRead += count
+							if _, ok := rpi.read[ma.Pool]; ok {
+								rpi.read[ma.Pool] += count
+							} else {
+								rpi.read[ma.Pool] = count
+							}
+						case d2.ACCESS_WRITE:
+							rpi.totalWrite += count
+							if _, ok := rpi.write[ma.Pool]; ok {
+								rpi.write[ma.Pool] += count
+							} else {
+								rpi.write[ma.Pool] = count
+							}
+						}
+					}
+
+					if _, ok := genCmd.(*vulkan.VkCmdEndRenderPass); ok {
+						log.W(ctx, "HUGUES EndRP at %v", scref.Index)
+						rpinfos = append(rpinfos, rpi)
+						insideRP = false
+					}
+				} else {
+					if _, ok := genCmd.(*vulkan.VkCmdBeginRenderPass); ok {
+						log.W(ctx, "HUGUES BeginRP at %v", scref.Index)
+						rpi = &rpinfo{
+							beginCmdIdx: append(api.SubCmdIdx{uint64(id)}, scref.Index...),
+							read:        make(map[memory.PoolID]uint64),
+							write:       make(map[memory.PoolID]uint64),
+						}
+						insideRP = true
+					}
+				}
+			}
+		}
+		return nil
+	}
+
+	err = api.ForeachCmd(ctx, c.Commands, true, process)
+	if err != nil {
+		return nil, err
+	}
+
+	for i, rpi := range rpinfos {
+		log.W(ctx, "HUGUES rpinfo[%v]:%v", i, rpi)
+	}
+
+	// Construct framegraph
+	nodes := []*api.FramegraphNode{}
+	for i, rpi := range rpinfos {
+
+		text := fmt.Sprintf("RP %v\\nRead:%v\\nWrite:%v", rpi.beginCmdIdx, rpi.totalRead, rpi.totalWrite)
+
+		nodes = append(nodes, &api.FramegraphNode{
+			Id:   uint64(i),
+			Type: api.FramegraphNodeType_RENDERPASS,
+			Text: text,
+		})
+	}
+
+	return &service.Framegraph{Nodes: nodes}, nil
 }
