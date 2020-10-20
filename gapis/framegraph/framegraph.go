@@ -408,6 +408,7 @@ func pool2image(s *vulkan.State) map[memory.PoolID]map[vulkan.VkImage]bool {
 // results: RP1 [12 0 0 34] reads: map[pool]uint64  -- pool -> number of bytes read/written
 type rpinfo struct {
 	beginCmdIdx api.SubCmdIdx
+	dpNodes     map[d2.NodeID]bool
 	read        map[memory.PoolID]uint64
 	totalRead   uint64
 	write       map[memory.PoolID]uint64
@@ -468,6 +469,7 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.Framegraph, e
 				if insideRP {
 
 					nodeID := dependencyGraph.GetCmdNodeID(id, scref.Index)
+					rpi.dpNodes[nodeID] = true
 					na := dependencyGraph.GetNodeAccesses(nodeID)
 					for _, ma := range na.MemoryAccesses {
 						count := ma.Span.End - ma.Span.Start
@@ -498,10 +500,12 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.Framegraph, e
 				} else {
 					if _, ok := genCmd.(*vulkan.VkCmdBeginRenderPass); ok {
 						log.W(ctx, "HUGUES BeginRP at %v", scref.Index)
+						nodeID := dependencyGraph.GetCmdNodeID(id, scref.Index)
 						rpi = &rpinfo{
 							beginCmdIdx: append(api.SubCmdIdx{uint64(id)}, scref.Index...),
 							read:        make(map[memory.PoolID]uint64),
 							write:       make(map[memory.PoolID]uint64),
+							dpNodes:     map[d2.NodeID]bool{nodeID: true},
 						}
 						insideRP = true
 					}
@@ -524,7 +528,7 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.Framegraph, e
 	nodes := []*api.FramegraphNode{}
 	for i, rpi := range rpinfos {
 
-		text := fmt.Sprintf("RP %v\\nRead:%v\\nWrite:%v", rpi.beginCmdIdx, rpi.totalRead, rpi.totalWrite)
+		text := fmt.Sprintf("RP %v\\nRead:%v bytes\\nWrite:%v bytes", rpi.beginCmdIdx, rpi.totalRead, rpi.totalWrite)
 
 		nodes = append(nodes, &api.FramegraphNode{
 			Id:   uint64(i),
@@ -533,5 +537,29 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.Framegraph, e
 		})
 	}
 
-	return &service.Framegraph{Nodes: nodes}, nil
+	edges := []*api.FramegraphEdge{}
+	for i, srcRpi := range rpinfos {
+		dependsOn := map[int]bool{}
+		for src := range srcRpi.dpNodes {
+			dependencyGraph.ForeachDependencyFrom(src, func(nodeID d2.NodeID) error {
+				for j, dstRpi := range rpinfos {
+					if dstRpi == srcRpi {
+						continue
+					}
+					if _, ok := dstRpi.dpNodes[nodeID]; ok {
+						dependsOn[j] = true
+					}
+				}
+				return nil
+			})
+		}
+		for dep := range dependsOn {
+			edges = append(edges, &api.FramegraphEdge{
+				Origin:      uint64(i),
+				Destination: uint64(dep),
+			})
+		}
+	}
+
+	return &service.Framegraph{Nodes: nodes, Edges: edges}, nil
 }
