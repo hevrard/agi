@@ -419,9 +419,11 @@ func createStateResourceMapping(s *vulkan.State) stateResourceMapping {
 		//devMem:  make(map[vulkan.VkDeviceMemory]map[memory.PoolID][]interval.U64Span),
 	}
 
+	// check we do access all layers level data??
+	// debugger in dovkcmdendrenderpass accessimagesubresource
 	images := s.Images().All()
 	for handle, image := range images {
-		//fmt.Printf("HUGUES SRM img: %v\n", handle)
+		fmt.Printf("HUGUES SRM img: %v\n", handle)
 		if _, ok := srm.images[handle]; !ok {
 			srm.images[handle] = make(map[memory.PoolID][]interval.U64Span)
 		}
@@ -433,11 +435,8 @@ func createStateResourceMapping(s *vulkan.State) stateResourceMapping {
 					if _, ok := srm.images[handle][pool]; !ok {
 						srm.images[handle][pool] = []interval.U64Span{}
 					}
-					//fmt.Printf("HUGUES SRM img: %v pool:%v base:%v\n", handle, pool, data.Base())
-					srm.images[handle][pool] = append(srm.images[handle][pool], interval.U64Span{
-						Start: data.Base(),
-						End:   data.Base() + data.Size(),
-					})
+					fmt.Printf("HUGUES SRM img: %v pool:%v\n", handle, pool)
+					srm.images[handle][pool] = append(srm.images[handle][pool], data.Range().Span())
 				}
 			}
 		}
