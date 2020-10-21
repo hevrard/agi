@@ -409,12 +409,14 @@ func pool2image(s *vulkan.State) map[memory.PoolID]map[vulkan.VkImage]bool {
 type stateResourceMapping struct {
 	images  map[vulkan.VkImage]map[memory.PoolID][]interval.U64Span
 	buffers map[vulkan.VkBuffer]map[memory.PoolID][]interval.U64Span
+	//devMem  map[vulkan.VkDeviceMemory]map[memory.PoolID][]interval.U64Span
 }
 
 func createStateResourceMapping(s *vulkan.State) stateResourceMapping {
 	srm := stateResourceMapping{
 		images:  make(map[vulkan.VkImage]map[memory.PoolID][]interval.U64Span),
 		buffers: make(map[vulkan.VkBuffer]map[memory.PoolID][]interval.U64Span),
+		//devMem:  make(map[vulkan.VkDeviceMemory]map[memory.PoolID][]interval.U64Span),
 	}
 
 	images := s.Images().All()
@@ -464,6 +466,43 @@ func createStateResourceMapping(s *vulkan.State) stateResourceMapping {
 		srm.buffers[handle][pool] = append(srm.buffers[handle][pool], data.Range().Span())
 	}
 
+	devMems := s.DeviceMemories().All()
+	for _, devMem := range devMems {
+		data := devMem.Data()
+		pool := data.Pool()
+		span := data.Range().Span()
+		boundObj := devMem.BoundObjects().All()
+		// TODO: deal with memory offset from boundObj
+		found := false
+		for objHandle := range boundObj {
+			imgHandle := vulkan.VkImage(objHandle)
+			if _, ok := srm.images[imgHandle]; ok {
+				if found {
+					fmt.Printf("\nHUGUES double handle: %v", imgHandle)
+				}
+				found = true
+				if _, ok := srm.images[imgHandle][pool]; !ok {
+					srm.images[imgHandle][pool] = []interval.U64Span{}
+				}
+				srm.images[imgHandle][pool] = append(srm.images[imgHandle][pool], span)
+			}
+			bufHandle := vulkan.VkBuffer(objHandle)
+			if _, ok := srm.buffers[bufHandle]; ok {
+				if found {
+					fmt.Printf("\nHUGUES double handle: %v", bufHandle)
+				}
+				found = true
+				if _, ok := srm.buffers[bufHandle][pool]; !ok {
+					srm.buffers[bufHandle][pool] = []interval.U64Span{}
+				}
+				srm.buffers[bufHandle][pool] = append(srm.buffers[bufHandle][pool], span)
+			}
+			if !found {
+				fmt.Printf("\nHUGUES objHandle NOT FOUND: %v", objHandle)
+			}
+		}
+	}
+
 	return srm
 }
 
@@ -496,7 +535,7 @@ func (s stateResourceMapping) resourceLookup(poolID memory.PoolID, span interval
 		}
 	}
 
-	fmt.Printf("\nHUGUES resLookup FAIL poolID:%v span:%v\n", poolID, span)
+	//fmt.Printf("\nHUGUES resLookup FAIL poolID:%v span:%v\n", poolID, span)
 	return resource{}, false
 }
 
@@ -579,6 +618,8 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.Framegraph, e
 				}
 				if insideRP {
 
+					log.W(ctx, "HUGUES insideRP cmd:%v", genCmd)
+
 					nodeID := dependencyGraph.GetCmdNodeID(id, scref.Index)
 					rpi.dpNodes[nodeID] = true
 					na := dependencyGraph.GetNodeAccesses(nodeID)
@@ -609,6 +650,8 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.Framegraph, e
 										rpi.bufRead[res.id] = count
 									}
 								}
+							} else {
+								log.W(ctx, "HUGUES resLookup FAIL pool:%v span:%v\n", ma.Pool, ma.Span)
 							}
 						case d2.ACCESS_WRITE:
 							rpi.totalWrite += count
@@ -634,6 +677,8 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.Framegraph, e
 										rpi.bufWrite[res.id] = count
 									}
 								}
+							} else {
+								log.W(ctx, "HUGUES resLookup FAIL pool:%v span:%v", ma.Pool, ma.Span)
 							}
 						}
 					}
@@ -678,18 +723,19 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.Framegraph, e
 	nodes := []*api.FramegraphNode{}
 	for i, rpi := range rpinfos {
 
-		text := fmt.Sprintf("RP %v\\nRead:%v bytes\\nWrite:%v bytes", rpi.beginCmdIdx, rpi.totalRead, rpi.totalWrite)
+		// Use "\l" for newlines as this produce left-align lines in graphviz DOT labels
+		text := fmt.Sprintf("RP %v\\lRead:%v bytes\\lWrite:%v bytes\\l", rpi.beginCmdIdx, rpi.totalRead, rpi.totalWrite)
 		for img, bytes := range rpi.imgRead {
-			text += fmt.Sprintf("\\nRead img:%x (%v)", img, bytes)
+			text += fmt.Sprintf("%x img read(%v)\\l", img, bytes)
 		}
 		for img, bytes := range rpi.imgWrite {
-			text += fmt.Sprintf("\\nWrite img:%x (%v)", img, bytes)
+			text += fmt.Sprintf("%x img write(%v)\\l", img, bytes)
 		}
 		for buf, bytes := range rpi.bufRead {
-			text += fmt.Sprintf("\\nRead buf:%x (%v)", buf, bytes)
+			text += fmt.Sprintf("%x buf read(%v)\\l", buf, bytes)
 		}
 		for buf, bytes := range rpi.bufWrite {
-			text += fmt.Sprintf("\\nWrite buf:%x (%v)", buf, bytes)
+			text += fmt.Sprintf("%x buf write(%v)\\l", buf, bytes)
 		}
 
 		nodes = append(nodes, &api.FramegraphNode{
