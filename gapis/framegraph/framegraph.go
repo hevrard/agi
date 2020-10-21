@@ -447,10 +447,7 @@ func createStateResourceMapping(s *vulkan.State) stateResourceMapping {
 				srm.images[handle][pool] = []interval.U64Span{}
 			}
 			//fmt.Printf("HUGUES SRM img: %v pool:%v base:%v\n", handle, pool, data.Base())
-			srm.images[handle][pool] = append(srm.images[handle][pool], interval.U64Span{
-				Start: data.Base(),
-				End:   data.Base() + data.Size(),
-			})
+			srm.images[handle][pool] = append(srm.images[handle][pool], data.Range().Span())
 		}
 	}
 
@@ -464,10 +461,7 @@ func createStateResourceMapping(s *vulkan.State) stateResourceMapping {
 		if _, ok := srm.buffers[handle][pool]; !ok {
 			srm.buffers[handle][pool] = []interval.U64Span{}
 		}
-		srm.buffers[handle][pool] = append(srm.buffers[handle][pool], interval.U64Span{
-			Start: data.Base(),
-			End:   data.Base() + data.Size(),
-		})
+		srm.buffers[handle][pool] = append(srm.buffers[handle][pool], data.Range().Span())
 	}
 
 	return srm
