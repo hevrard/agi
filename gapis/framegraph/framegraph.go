@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/google/gapid/core/log"
+	"github.com/google/gapid/core/math/interval"
 	"github.com/google/gapid/gapis/api"
 	"github.com/google/gapid/gapis/api/sync"
 	"github.com/google/gapid/gapis/api/vulkan"
@@ -405,6 +406,106 @@ func pool2image(s *vulkan.State) map[memory.PoolID]map[vulkan.VkImage]bool {
 	return result
 }
 
+type stateResourceMapping struct {
+	images  map[vulkan.VkImage]map[memory.PoolID][]interval.U64Span
+	buffers map[vulkan.VkBuffer]map[memory.PoolID][]interval.U64Span
+}
+
+func createStateResourceMapping(s *vulkan.State) stateResourceMapping {
+	srm := stateResourceMapping{
+		images:  make(map[vulkan.VkImage]map[memory.PoolID][]interval.U64Span),
+		buffers: make(map[vulkan.VkBuffer]map[memory.PoolID][]interval.U64Span),
+	}
+
+	images := s.Images().All()
+	for handle, image := range images {
+		//fmt.Printf("HUGUES SRM img: %v\n", handle)
+		if _, ok := srm.images[handle]; !ok {
+			srm.images[handle] = make(map[memory.PoolID][]interval.U64Span)
+		}
+		for _, aspect := range image.Aspects().All() {
+			for _, layer := range aspect.Layers().All() {
+				for _, level := range layer.Levels().All() {
+					data := level.Data()
+					pool := data.Pool()
+					if _, ok := srm.images[handle][pool]; !ok {
+						srm.images[handle][pool] = []interval.U64Span{}
+					}
+					//fmt.Printf("HUGUES SRM img: %v pool:%v base:%v\n", handle, pool, data.Base())
+					srm.images[handle][pool] = append(srm.images[handle][pool], interval.U64Span{
+						Start: data.Base(),
+						End:   data.Base() + data.Size(),
+					})
+				}
+			}
+		}
+		planeMemInfos := image.PlaneMemoryInfo().All()
+		for _, memInfo := range planeMemInfos {
+			data := memInfo.BoundMemory().Data()
+			pool := data.Pool()
+			if _, ok := srm.images[handle][pool]; !ok {
+				srm.images[handle][pool] = []interval.U64Span{}
+			}
+			//fmt.Printf("HUGUES SRM img: %v pool:%v base:%v\n", handle, pool, data.Base())
+			srm.images[handle][pool] = append(srm.images[handle][pool], interval.U64Span{
+				Start: data.Base(),
+				End:   data.Base() + data.Size(),
+			})
+		}
+	}
+
+	buffers := s.Buffers().All()
+	for handle, buffer := range buffers {
+		if _, ok := srm.buffers[handle]; !ok {
+			srm.buffers[handle] = make(map[memory.PoolID][]interval.U64Span)
+		}
+		data := buffer.Memory().Data()
+		pool := data.Pool()
+		if _, ok := srm.buffers[handle][pool]; !ok {
+			srm.buffers[handle][pool] = []interval.U64Span{}
+		}
+		srm.buffers[handle][pool] = append(srm.buffers[handle][pool], interval.U64Span{
+			Start: data.Base(),
+			End:   data.Base() + data.Size(),
+		})
+	}
+
+	return srm
+}
+
+func (s stateResourceMapping) resourceLookup(poolID memory.PoolID, span interval.U64Span) (resource, bool) {
+	for img, mem := range s.images {
+		if intervals, ok := mem[poolID]; ok {
+			//fmt.Printf("\nHUGUES resLookup IMG:%v poolID:%v\n", img, poolID)
+			for _, interval := range intervals {
+				if interval.Start <= span.Start && span.End <= interval.End {
+					return resource{
+						kind: resourceImage,
+						id:   uint64(img),
+					}, true
+				}
+			}
+		}
+	}
+
+	for buf, mem := range s.buffers {
+		if intervals, ok := mem[poolID]; ok {
+			//fmt.Printf("\nHUGUES resLookup BUF:%v poolID:%v\n", buf, poolID)
+			for _, interval := range intervals {
+				if interval.Start <= span.Start && span.End <= interval.End {
+					return resource{
+						kind: resourceBuffer,
+						id:   uint64(buf),
+					}, true
+				}
+			}
+		}
+	}
+
+	fmt.Printf("\nHUGUES resLookup FAIL poolID:%v span:%v\n", poolID, span)
+	return resource{}, false
+}
+
 // results: RP1 [12 0 0 34] reads: map[pool]uint64  -- pool -> number of bytes read/written
 type rpinfo struct {
 	beginCmdIdx api.SubCmdIdx
@@ -413,6 +514,10 @@ type rpinfo struct {
 	totalRead   uint64
 	write       map[memory.PoolID]uint64
 	totalWrite  uint64
+	imgRead     map[uint64]uint64
+	imgWrite    map[uint64]uint64
+	bufRead     map[uint64]uint64
+	bufWrite    map[uint64]uint64
 }
 
 func GetFramegraph(ctx context.Context, p *path.Capture) (*service.Framegraph, error) {
@@ -440,18 +545,30 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.Framegraph, e
 		return nil, err
 	}
 
+	state := c.NewState(ctx)
+
 	vulkanAPI := api.Find(vulkan.ID)
 	vkSyncAPI := vulkanAPI.(sync.SynchronizedAPI)
 
 	rpinfos := []*rpinfo{}
 
 	process := func(ctx context.Context, id api.CmdID, cmd api.Cmd) error {
-		//log.W(ctx, "HUGUES cmd:%v %v", id, cmd)
+
+		// Start by mutating the command
+		err := cmd.Mutate(ctx, id, state, nil, nil)
+		if err != nil {
+			return err
+		}
+
+		// Process queueSubmits
 		if _, ok := cmd.(*vulkan.VkQueueSubmit); ok {
 			screfs, ok := snc.SubcommandReferences[id]
 			if !ok {
 				return log.Errf(ctx, nil, "no subcommands found for vkQueueSubmit")
 			}
+
+			srm := createStateResourceMapping(vulkan.GetState(state))
+			log.W(ctx, "HUGUES srm: %+v", srm)
 
 			var rpi *rpinfo
 			insideRP := false
@@ -473,7 +590,7 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.Framegraph, e
 					na := dependencyGraph.GetNodeAccesses(nodeID)
 					for _, ma := range na.MemoryAccesses {
 						count := ma.Span.End - ma.Span.Start
-						log.W(ctx, "HUGUES %v pool: %v count: %v", ma.Mode, ma.Pool, count)
+						log.W(ctx, "HUGUES %v pool: %v span: %v", ma.Mode, ma.Pool, ma.Span)
 						switch ma.Mode {
 						case d2.ACCESS_READ:
 							rpi.totalRead += count
@@ -482,12 +599,47 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.Framegraph, e
 							} else {
 								rpi.read[ma.Pool] = count
 							}
+							if res, ok := srm.resourceLookup(ma.Pool, ma.Span); ok {
+								//log.W(ctx, "HUGUES hit read resource: %v", res)
+								switch res.kind {
+								case resourceImage:
+									if _, ok := rpi.imgRead[res.id]; ok {
+										rpi.imgRead[res.id] += count
+									} else {
+										rpi.imgRead[res.id] = count
+									}
+								case resourceBuffer:
+									if _, ok := rpi.bufRead[res.id]; ok {
+										rpi.bufRead[res.id] += count
+									} else {
+										rpi.bufRead[res.id] = count
+									}
+								}
+							}
 						case d2.ACCESS_WRITE:
 							rpi.totalWrite += count
 							if _, ok := rpi.write[ma.Pool]; ok {
 								rpi.write[ma.Pool] += count
 							} else {
 								rpi.write[ma.Pool] = count
+							}
+
+							if res, ok := srm.resourceLookup(ma.Pool, ma.Span); ok {
+								//log.W(ctx, "HUGUES hit write resource: %v", res)
+								switch res.kind {
+								case resourceImage:
+									if _, ok := rpi.imgWrite[res.id]; ok {
+										rpi.imgWrite[res.id] += count
+									} else {
+										rpi.imgWrite[res.id] = count
+									}
+								case resourceBuffer:
+									if _, ok := rpi.bufWrite[res.id]; ok {
+										rpi.bufWrite[res.id] += count
+									} else {
+										rpi.bufWrite[res.id] = count
+									}
+								}
 							}
 						}
 					}
@@ -506,6 +658,10 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.Framegraph, e
 							read:        make(map[memory.PoolID]uint64),
 							write:       make(map[memory.PoolID]uint64),
 							dpNodes:     map[d2.NodeID]bool{nodeID: true},
+							imgRead:     make(map[uint64]uint64),
+							imgWrite:    make(map[uint64]uint64),
+							bufRead:     make(map[uint64]uint64),
+							bufWrite:    make(map[uint64]uint64),
 						}
 						insideRP = true
 					}
@@ -529,6 +685,18 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.Framegraph, e
 	for i, rpi := range rpinfos {
 
 		text := fmt.Sprintf("RP %v\\nRead:%v bytes\\nWrite:%v bytes", rpi.beginCmdIdx, rpi.totalRead, rpi.totalWrite)
+		for img, bytes := range rpi.imgRead {
+			text += fmt.Sprintf("\\nRead img:%x (%v)", img, bytes)
+		}
+		for img, bytes := range rpi.imgWrite {
+			text += fmt.Sprintf("\\nWrite img:%x (%v)", img, bytes)
+		}
+		for buf, bytes := range rpi.bufRead {
+			text += fmt.Sprintf("\\nRead buf:%x (%v)", buf, bytes)
+		}
+		for buf, bytes := range rpi.bufWrite {
+			text += fmt.Sprintf("\\nWrite buf:%x (%v)", buf, bytes)
+		}
 
 		nodes = append(nodes, &api.FramegraphNode{
 			Id:   uint64(i),
