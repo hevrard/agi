@@ -423,7 +423,7 @@ func createStateResourceMapping(s *vulkan.State) stateResourceMapping {
 	// debugger in dovkcmdendrenderpass accessimagesubresource
 	images := s.Images().All()
 	for handle, image := range images {
-		fmt.Printf("HUGUES SRM img: %v\n", handle)
+		//fmt.Printf("HUGUES SRM img: %v\n", handle)
 		if _, ok := srm.images[handle]; !ok {
 			srm.images[handle] = make(map[memory.PoolID][]interval.U64Span)
 		}
@@ -435,7 +435,7 @@ func createStateResourceMapping(s *vulkan.State) stateResourceMapping {
 					if _, ok := srm.images[handle][pool]; !ok {
 						srm.images[handle][pool] = []interval.U64Span{}
 					}
-					fmt.Printf("HUGUES SRM img: %v pool:%v\n", handle, pool)
+					//fmt.Printf("HUGUES SRM img: %v pool:%v\n", handle, pool)
 					srm.images[handle][pool] = append(srm.images[handle][pool], data.Range().Span())
 				}
 			}
@@ -499,6 +499,44 @@ func createStateResourceMapping(s *vulkan.State) stateResourceMapping {
 			if !found {
 				fmt.Printf("\nHUGUES objHandle NOT FOUND: %v", objHandle)
 			}
+		}
+	}
+
+	// Lookup swapchain images
+	for _, swapchain := range s.Swapchains().All() {
+		for _, image := range swapchain.SwapchainImages().All() {
+
+			handle := image.VulkanHandle()
+
+			if _, ok := srm.images[handle]; !ok {
+				srm.images[handle] = make(map[memory.PoolID][]interval.U64Span)
+			}
+			for _, aspect := range image.Aspects().All() {
+				for _, layer := range aspect.Layers().All() {
+					for _, level := range layer.Levels().All() {
+						data := level.Data()
+						pool := data.Pool()
+						if _, ok := srm.images[handle][pool]; !ok {
+							srm.images[handle][pool] = []interval.U64Span{}
+						}
+						fmt.Printf("HUGUES SRM swapchain img: %v pool:%v\n", handle, pool)
+						//fmt.Printf("HUGUES SRM img: %v pool:%v\n", handle, pool)
+						srm.images[handle][pool] = append(srm.images[handle][pool], data.Range().Span())
+					}
+				}
+			}
+			planeMemInfos := image.PlaneMemoryInfo().All()
+			for _, memInfo := range planeMemInfos {
+				data := memInfo.BoundMemory().Data()
+				pool := data.Pool()
+				if _, ok := srm.images[handle][pool]; !ok {
+					srm.images[handle][pool] = []interval.U64Span{}
+				}
+				fmt.Printf("HUGUES SRM swapchain img: %v pool:%v\n", handle, pool)
+				//fmt.Printf("HUGUES SRM img: %v pool:%v base:%v\n", handle, pool, data.Base())
+				srm.images[handle][pool] = append(srm.images[handle][pool], data.Range().Span())
+			}
+
 		}
 	}
 
@@ -599,8 +637,24 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.Framegraph, e
 				return log.Errf(ctx, nil, "no subcommands found for vkQueueSubmit")
 			}
 
-			srm := createStateResourceMapping(vulkan.GetState(state))
+			vkState := vulkan.GetState(state)
+			srm := createStateResourceMapping(vkState)
 			log.W(ctx, "HUGUES srm: %+v", srm)
+
+			stImages := vkState.Images().All()
+			if img, ok := stImages[vulkan.VkImage(3899485040)]; ok {
+				log.W(ctx, "HUGUES SPECIAL IMAGE img:%v", img.VulkanHandle())
+				for _, aspect := range img.Aspects().All() {
+					for _, layer := range aspect.Layers().All() {
+						for _, level := range layer.Levels().All() {
+							log.W(ctx, "HUGUES SPECIAL IMAGE pool:%v", level.Data().Pool())
+						}
+					}
+				}
+			}
+			// for img, obj := range vkState.Images().All() {
+			// 	log.W(ctx, "HUGUES VKSTATE img:%v obj:%v", img, obj.VulkanHandle())
+			// }
 
 			var rpi *rpinfo
 			insideRP := false
@@ -649,9 +703,10 @@ func GetFramegraph(ctx context.Context, p *path.Capture) (*service.Framegraph, e
 										rpi.bufRead[res.id] = count
 									}
 								}
-							} else {
-								log.W(ctx, "HUGUES resLookup FAIL pool:%v span:%v\n", ma.Pool, ma.Span)
 							}
+							//  else {
+							// 	log.W(ctx, "HUGUES resLookup FAIL pool:%v span:%v\n", ma.Pool, ma.Span)
+							// }
 						case d2.ACCESS_WRITE:
 							rpi.totalWrite += count
 							if _, ok := rpi.write[ma.Pool]; ok {

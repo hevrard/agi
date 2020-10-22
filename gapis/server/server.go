@@ -28,9 +28,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/google/gapid/core/app/crash"
 	"github.com/google/gapid/core/app/crash/reporting"
-	"github.com/google/gapid/core/context/keys"
 
 	"github.com/google/gapid/core/app"
 	"github.com/google/gapid/core/app/analytics"
@@ -44,7 +42,6 @@ import (
 	"github.com/google/gapid/core/os/device/bind"
 	"github.com/google/gapid/core/os/file"
 	"github.com/google/gapid/gapis/capture"
-	"github.com/google/gapid/gapis/config"
 	"github.com/google/gapid/gapis/framegraph"
 	"github.com/google/gapid/gapis/messages"
 	perfetto "github.com/google/gapid/gapis/perfetto/service"
@@ -280,29 +277,29 @@ func (s *server) LoadCapture(ctx context.Context, path string) (*path.Capture, e
 		return nil, err
 	}
 	// Ensure the capture can be read by resolving it now.
-	c, err := capture.ResolveFromPath(ctx, p)
-	if err != nil {
-		return nil, err
-	}
+	// c, err := capture.ResolveFromPath(ctx, p)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	// For graphics capture, pre-resolve the dependency graph.
-	if c.Service(ctx, p).Type == service.TraceType_Graphics && !config.DisableDeadCodeElimination && s.preloadDepGraph {
-		newCtx := keys.Clone(context.Background(), ctx)
-		crash.Go(func() {
-			cctx := status.PutTask(newCtx, nil)
-			cctx = status.StartBackground(cctx, "Precaching Dependency Graph")
-			defer status.Finish(cctx)
-			var err error
-			cfg := dependencygraph2.DependencyGraphConfig{
-				MergeSubCmdNodes:       true,
-				IncludeInitialCommands: false,
-			}
-			_, err = dependencygraph2.GetDependencyGraph(cctx, p, cfg)
-			if err != nil {
-				log.E(newCtx, "Error resolve dependency graph: %v", err)
-			}
-		})
-	}
+	// if c.Service(ctx, p).Type == service.TraceType_Graphics && !config.DisableDeadCodeElimination && s.preloadDepGraph {
+	// 	newCtx := keys.Clone(context.Background(), ctx)
+	// 	crash.Go(func() {
+	// 		cctx := status.PutTask(newCtx, nil)
+	// 		cctx = status.StartBackground(cctx, "Precaching Dependency Graph")
+	// 		defer status.Finish(cctx)
+	// 		var err error
+	// 		cfg := dependencygraph2.DependencyGraphConfig{
+	// 			MergeSubCmdNodes:       true,
+	// 			IncludeInitialCommands: false,
+	// 		}
+	// 		_, err = dependencygraph2.GetDependencyGraph(cctx, p, cfg)
+	// 		if err != nil {
+	// 			log.E(newCtx, "Error resolve dependency graph: %v", err)
+	// 		}
+	// 	})
+	// }
 	return p, nil
 }
 
