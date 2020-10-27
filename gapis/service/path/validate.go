@@ -284,6 +284,8 @@ func (n *Resources) Validate() error {
 	return checkNotNilAndValidate(n, n.Capture, "capture")
 }
 
+// HUGUES the framegraph one is similar to the above.
+
 // Validate checks the path is valid.
 func (n *Result) Validate() error {
 	return checkNotNilAndValidate(n, n.Command, "command")

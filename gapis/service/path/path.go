@@ -570,6 +570,9 @@ func (n *Capture) Messages() *Messages {
 	return &Messages{Capture: n}
 }
 
+// HUGUES this is where we add a new helper to get Framegraph.
+// Implement all helpers: Format, Validate, etc..., see top of file.
+
 // Commands returns the path node to the capture's commands.
 func (n *Capture) Commands() *Commands {
 	return &Commands{

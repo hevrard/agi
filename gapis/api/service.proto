@@ -510,6 +510,8 @@ message SparseBinding {
 
 // Framegraph
 
+// Think about: linkification, maybe perf data also.
+
 // A resource is something that can be read/write
 // re-use e.g. BufferInfo and ImageInfo here?
 enum FramegraphResourceType {
