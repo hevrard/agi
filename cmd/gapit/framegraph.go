@@ -155,6 +155,22 @@ func imageAccess2dot(acc *api.FramegraphImageAccess) string {
 	return fmt.Sprintf("%s%s %s", r, w, image2dot(acc.Image))
 }
 
+func buffer2dot(buf *api.FramegraphBuffer) string {
+	return fmt.Sprintf("[Buf %v size:%v]", buf.Handle, buf.Size)
+}
+
+func bufferAccess2dot(acc *api.FramegraphBufferAccess) string {
+	r := "-"
+	if acc.Read {
+		r = "r"
+	}
+	w := "-"
+	if acc.Write {
+		w = "w"
+	}
+	return fmt.Sprintf("%s%s %s", r, w, buffer2dot(acc.Buffer))
+}
+
 func renderpass2dot(rp *api.FramegraphRenderpass) string {
 	s := fmt.Sprintf("Renderpass %v\\lbegin:%v\\lend:  %v\\lFramebuffer: %vx%vx%v\\l", rp.Handle, rp.BeginSubCmdIdx, rp.EndSubCmdIdx, rp.FramebufferWidth, rp.FramebufferHeight, rp.FramebufferLayers)
 	for i, subpass := range rp.Subpass {
@@ -175,6 +191,13 @@ func renderpass2dot(rp *api.FramegraphRenderpass) string {
 		s += "\\lImage accesses:\\l"
 		for _, acc := range rp.ImageAccess {
 			s += fmt.Sprintf("%s\\l", imageAccess2dot(acc))
+		}
+	}
+
+	if len(rp.BufferAccess) > 0 {
+		s += "\\lBuffer accesses:\\l"
+		for _, acc := range rp.BufferAccess {
+			s += fmt.Sprintf("%s\\l", bufferAccess2dot(acc))
 		}
 	}
 
