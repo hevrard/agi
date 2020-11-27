@@ -54,6 +54,9 @@ class StateSerializer {
   inline void sendData(memory::Observation* observation, bool sendObservation,
                        const void* data, size_t size);
 
+  // Ends capture with an error.
+  void endTraceWithError(const char* errmsg);
+
  private:
   void prepareForState(std::function<void(StateSerializer*)> serialize_buffers);
   pool_t* createPool(

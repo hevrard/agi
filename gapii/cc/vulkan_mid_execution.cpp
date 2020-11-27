@@ -32,6 +32,12 @@
 namespace {
 const uint64_t kChunkSizeLimit =
     16 * 1024 * 1024;  // Limit the data to prevent OOM
+
+  // The replayer volatile memory is 32 bits based, it cannot handle resources
+  // bigger than 4GB
+  //const uint64_t kResourceSizeLimit = (uint64_t)(4 * 1024) * (uint64_t)(1024 * 1024);
+  const uint64_t kResourceSizeLimit = 4 * 1024 * 1024 * 1024;
+  const char* kResourceTooBigMsg = "Resource is too big (>4GB)";
 }
 
 namespace gapii {
@@ -336,6 +342,10 @@ void VulkanSpy::serializeGPUBuffers(StateSerializer* serializer) {
 
   for (auto& mem : mState.DeviceMemories) {
     auto& memory = mem.second;
+    if (memory->mAllocationSize > kResourceSizeLimit) {
+      serializer->endTraceWithError(kResourceTooBigMsg);
+      return;
+    }
     serializer->encodeBuffer(memory->mAllocationSize, &memory->mData, nullptr);
     if (memory->mMappedLocation != nullptr) {
       if (subIsMemoryCoherent(nullptr, nullptr, memory)) {

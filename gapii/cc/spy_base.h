@@ -115,6 +115,9 @@ class SpyBase {
   // Ends the current trace if requested by client.
   virtual void endTraceIfRequested() {}
 
+  // Ends the current trace with an error.
+  virtual void endTraceIfRequested(const char* errmsg) {}
+
  protected:
   // lock begins the interception of a single command. It must be called
   // before invoking any command on the spy. Blocks if any other thread

@@ -37,6 +37,7 @@ class Spy : public VulkanSpy {
   void exit();
 
   void endTraceIfRequested() override;
+  void endTraceWithError(const char* errmsg) override;
 
   void onPostDrawCall(CallObserver* observer, uint8_t api) override;
   void onPreStartOfFrame(CallObserver* observer, uint8_t api) override;

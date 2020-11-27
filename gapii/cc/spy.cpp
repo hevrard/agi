@@ -270,6 +270,19 @@ void Spy::endTraceIfRequested() {
   }
 }
 
+void Spy::endTraceWithError(const char* errmsg) {
+  if (!is_suspended() && mCaptureFrames < 0) {
+    GAPID_DEBUG("Ended capture with error: %s", errmsg);
+    mEncoder->flush();
+    auto err = protocol::createError(errmsg);
+    mConnection->write(err.data(), err.size());
+    // allow some time for the message to arrive
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    mConnection->close();
+    set_suspended(true);
+  }
+}
+
 void Spy::onPostDrawCall(CallObserver* observer, uint8_t api) {
   if (is_suspended()) {
     return;

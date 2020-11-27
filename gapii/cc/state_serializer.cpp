@@ -69,4 +69,8 @@ pool_t* StateSerializer::createPool(
   return pool;
 }
 
+void StateSerializer::endTraceWithError(const char* errmsg) {
+  mSpy->endTraceWithError(errmsg);
+}
+
 }  // namespace gapii
