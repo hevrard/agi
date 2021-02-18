@@ -64,6 +64,42 @@ func (*State) Root(ctx context.Context, p *path.State, r *path.ResolveConfig) (p
 	return p, nil
 }
 
+func (s *State) HuguesSize(ctx context.Context) {
+	log.E(ctx, "HUGUES instances: %v", s.Instances().Len())
+	log.E(ctx, "HUGUES PhysicalDevices: %v", s.PhysicalDevices().Len())
+	log.E(ctx, "HUGUES Devices: %v", s.Devices().Len())
+	log.E(ctx, "HUGUES Queues: %v", s.Queues().Len())
+	log.E(ctx, "HUGUES CommandBuffers: %v", s.CommandBuffers().Len())
+	log.E(ctx, "HUGUES DeviceMemories: %v", s.DeviceMemories().Len())
+	log.E(ctx, "HUGUES Buffers: %v", s.Buffers().Len())
+	log.E(ctx, "HUGUES BufferViews: %v", s.BufferViews().Len())
+	log.E(ctx, "HUGUES Images: %v", s.Images().Len())
+	log.E(ctx, "HUGUES ImageViews: %v", s.ImageViews().Len())
+	log.E(ctx, "HUGUES ShaderModules: %v", s.ShaderModules().Len())
+	log.E(ctx, "HUGUES GraphicsPipelines: %v", s.GraphicsPipelines().Len())
+	log.E(ctx, "HUGUES ComputePipelines: %v", s.ComputePipelines().Len())
+	log.E(ctx, "HUGUES PipelineLayouts: %v", s.PipelineLayouts().Len())
+	log.E(ctx, "HUGUES Samplers: %v", s.Samplers().Len())
+	log.E(ctx, "HUGUES DescriptorSets: %v", s.DescriptorSets().Len())
+	log.E(ctx, "HUGUES DescriptorSetLayouts: %v", s.DescriptorSetLayouts().Len())
+	log.E(ctx, "HUGUES DescriptorPools: %v", s.DescriptorPools().Len())
+	log.E(ctx, "HUGUES Fences: %v", s.Fences().Len())
+	log.E(ctx, "HUGUES Semaphores: %v", s.Semaphores().Len())
+	log.E(ctx, "HUGUES Events: %v", s.Events().Len())
+	log.E(ctx, "HUGUES QueryPools: %v", s.QueryPools().Len())
+	log.E(ctx, "HUGUES Framebuffers: %v", s.Framebuffers().Len())
+	log.E(ctx, "HUGUES RenderPasses: %v", s.RenderPasses().Len())
+	log.E(ctx, "HUGUES PipelineCaches: %v", s.PipelineCaches().Len())
+	log.E(ctx, "HUGUES CommandPools: %v", s.CommandPools().Len())
+	log.E(ctx, "HUGUES Surfaces: %v", s.Surfaces().Len())
+	log.E(ctx, "HUGUES Swapchains: %v", s.Swapchains().Len())
+	log.E(ctx, "HUGUES DisplayModes: %v", s.DisplayModes().Len())
+	log.E(ctx, "HUGUES DebugReportCallbacks: %v", s.DebugReportCallbacks().Len())
+	log.E(ctx, "HUGUES SamplerYcbcrConversions: %v", s.SamplerYcbcrConversions().Len())
+	log.E(ctx, "HUGUES DescriptorUpdateTemplates: %v", s.DescriptorUpdateTemplates().Len())
+	log.E(ctx, "HUGUES TransferBufferMemoryRequirements: %v", s.TransferBufferMemoryRequirements().Len())
+}
+
 // SetupInitialState recreates the command lamdas from the state block.
 // These are not encoded so we have to set them up here.
 func (s *State) SetupInitialState(ctx context.Context, state *api.GlobalState) {
@@ -509,5 +545,39 @@ func (API) MutateSubcommands(ctx context.Context, id api.CmdID, cmd api.Cmd,
 	if err := cmd.Mutate(ctx, id, s, nil, nil); err != nil {
 		return fmt.Errorf("Fail to mutate command %v: %v", cmd, err)
 	}
+	return nil
+}
+
+func (API) CleanupInitialState(ctx context.Context, p *path.Capture) error {
+
+	log.E(ctx, "HUGUES enter CleanupInitialState")
+
+	numBindPipeline := 0
+
+	postSubCmdCb := func(state *api.GlobalState, subCmdIdx api.SubCmdIdx, cmd api.Cmd, i interface{}) {
+		vkState := GetState(state)
+		cmdRef, ok := i.(CommandReferenceʳ)
+		if !ok {
+			panic("In Vulkan, MutateWithSubCommands' postSubCmdCb 'interface{}' is not a CommandReferenceʳ")
+		}
+		cmdArgs := GetCommandArgs(ctx, cmdRef, vkState)
+
+		switch cmdArgs.(type) {
+		case VkCmdBindPipelineArgsʳ:
+			log.E(ctx, "HUGUES saw vkBindPipeLine")
+			numBindPipeline++
+		}
+	}
+
+	c, err := capture.ResolveGraphicsFromPath(ctx, p)
+	if err != nil {
+		return err
+	}
+	if err := sync.MutateWithSubcommands(ctx, p, c.Commands, nil, nil, postSubCmdCb); err != nil {
+		return err
+	}
+
+	log.E(ctx, "HUGUES CleanupInitialState bindPipeline:%v", numBindPipeline)
+
 	return nil
 }
