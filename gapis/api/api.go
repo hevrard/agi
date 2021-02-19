@@ -60,8 +60,6 @@ type API interface {
 
 	// GetFramegraph returns the framegraph of the capture.
 	GetFramegraph(ctx context.Context, p *path.Capture) (*Framegraph, error)
-
-	CleanupInitialState(ctx context.Context, p *path.Capture) error
 }
 
 // FramebufferAttachmentInfo describes a framebuffer at a given point in the trace

@@ -69,6 +69,7 @@ func (s *State) HuguesCleanup(ctx context.Context, p *path.Capture) error {
 	log.E(ctx, "HUGUES state cleanup")
 
 	pipelines := map[VkPipeline]struct{}{}
+	descriptorSets := map[VkDescriptorSet]struct{}{}
 
 	log.E(ctx, "HUGUES number of lastComputeInfo:%v", s.LastComputeInfos().Len())
 	for _, i := range s.LastComputeInfos().All() {
@@ -95,10 +96,34 @@ func (s *State) HuguesCleanup(ctx context.Context, p *path.Capture) error {
 		switch args := cmdArgs.(type) {
 		case VkCmdBindPipelineArgsʳ:
 			pl := args.Pipeline()
-			log.E(ctx, "HUGUES saw vkBindPipeLine:%v", pl)
+			//log.E(ctx, "HUGUES saw vkBindPipeLine:%v", pl)
 			pipelines[pl] = struct{}{}
+
+		case VkCmdBindDescriptorSetsArgsʳ:
+			//log.E(ctx, "HUGUES VkCmdBindDescriptorSetsArgsʳ")
+			for _, d := range args.DescriptorSets().All() {
+				descriptorSets[d] = struct{}{}
+			}
+
 		}
 	}
+
+	// postCmdCb := func(s *api.GlobalState, subCmdIdx api.SubCmdIdx, cmd api.Cmd) {
+	// 	switch cmd := cmd.(type) {
+	// 	case *VkQueueSubmit:
+	// 		log.E(ctx, "HUGUES seeing a vkQueueSubmit")
+
+	// 	case *VkCreateGraphicsPipelines:
+	// 		log.E(ctx, "HUGUES seeing a vkCreateGraphicsPipelines")
+	// 		pci := cmd.PCreateInfos()
+	// 		ci, err := pci.Read(ctx, cmd, s, nil)
+	// 		if err != nil {
+	// 			panic("HUGUES read error")
+	// 		}
+	// 		pl := ci.BasePipelineHandle()
+	// 		pipelines[pl] = struct{}{}
+	// 	}
+	// }
 
 	c, err := capture.ResolveGraphicsFromPath(ctx, p)
 	if err != nil {
@@ -108,7 +133,7 @@ func (s *State) HuguesCleanup(ctx context.Context, p *path.Capture) error {
 		return err
 	}
 
-	log.E(ctx, "HUGUES CleanupInitialState bindedPipeline:%v", len(pipelines))
+	log.E(ctx, "HUGUES cleanup bindedPipeline:%v descSet:%v", len(pipelines), len(descriptorSets))
 
 	gpl := s.GraphicsPipelines()
 	log.E(ctx, "HUGUES num gfx pl before cleanup:%v", gpl.Len())
@@ -122,7 +147,21 @@ func (s *State) HuguesCleanup(ctx context.Context, p *path.Capture) error {
 	for _, p := range toremove {
 		gpl.Remove(p)
 	}
-	log.E(ctx, "HUGUES num gfx pl before cleanup:%v", gpl.Len())
+	log.E(ctx, "HUGUES num gfx pl after cleanup:%v", gpl.Len())
+
+	dsets := s.DescriptorSets()
+	log.E(ctx, "HUGUES num dsets before cleanup:%v", dsets.Len())
+	dsetToRm := []VkDescriptorSet{}
+	for d := range dsets.All() {
+		if _, ok := descriptorSets[d]; !ok {
+			dsetToRm = append(dsetToRm, d)
+		}
+	}
+	log.E(ctx, "HUGUES dsetToRm:%v", len(dsetToRm))
+	for _, d := range dsetToRm {
+		dsets.Remove(d)
+	}
+	log.E(ctx, "HUGUES num descrset after cleanup:%v", dsets.Len())
 
 	return nil
 }
@@ -608,46 +647,5 @@ func (API) MutateSubcommands(ctx context.Context, id api.CmdID, cmd api.Cmd,
 	if err := cmd.Mutate(ctx, id, s, nil, nil); err != nil {
 		return fmt.Errorf("Fail to mutate command %v: %v", cmd, err)
 	}
-	return nil
-}
-
-func (API) CleanupInitialState(ctx context.Context, p *path.Capture) error {
-
-	// log.E(ctx, "HUGUES enter CleanupInitialState")
-
-	// pipelines := map[VkPipeline]struct{}{}
-
-	// postSubCmdCb := func(state *api.GlobalState, subCmdIdx api.SubCmdIdx, cmd api.Cmd, i interface{}) {
-	// 	vkState := GetState(state)
-	// 	cmdRef, ok := i.(CommandReferenceʳ)
-	// 	if !ok {
-	// 		panic("In Vulkan, MutateWithSubCommands' postSubCmdCb 'interface{}' is not a CommandReferenceʳ")
-	// 	}
-	// 	cmdArgs := GetCommandArgs(ctx, cmdRef, vkState)
-
-	// 	switch args := cmdArgs.(type) {
-	// 	case VkCmdBindPipelineArgsʳ:
-	// 		pl := args.Pipeline()
-	// 		log.E(ctx, "HUGUES saw vkBindPipeLine:%v", pl)
-	// 		pipelines[pl] = struct{}{}
-	// 	}
-	// }
-
-	c, err := capture.ResolveGraphicsFromPath(ctx, p)
-	if err != nil {
-		return err
-	}
-	// if err := sync.MutateWithSubcommands(ctx, p, c.Commands, nil, nil, postSubCmdCb); err != nil {
-	// 	return err
-	// }
-
-	// log.E(ctx, "HUGUES CleanupInitialState bindedPipeline:%v", len(pipelines))
-
-	for _, v := range c.InitialState.APIs {
-		if err := v.HuguesCleanup(ctx, p); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }

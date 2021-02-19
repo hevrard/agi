@@ -134,9 +134,9 @@ func (c *GraphicsCapture) NewUninitializedState(ctx context.Context) *api.Global
 // c. If the capture contains a mid-execution state, then this will be copied
 // into the returned state.
 func (c *GraphicsCapture) NewState(ctx context.Context) *api.GlobalState {
-	start := time.Now()
+	//start := time.Now()
 	out := c.NewUninitializedState(ctx)
-	log.E(ctx, "HUGUES CloneState NewUninitialized: %v", time.Since(start))
+	//log.E(ctx, "HUGUES CloneState NewUninitialized: %v", time.Since(start))
 	if c.InitialState != nil {
 		ctx = status.Start(ctx, "CloneState")
 		defer status.Finish(ctx)
@@ -149,22 +149,22 @@ func (c *GraphicsCapture) NewState(ctx context.Context) *api.GlobalState {
 			}
 			pool.Write(m.Range.Base, memory.Resource(m.ID, m.Range.Size))
 		}
-		log.E(ctx, "HUGUES CloneState mempool: %v", time.Since(start))
+		//log.E(ctx, "HUGUES CloneState mempool: %v", time.Since(start))
 
 		// Clone serialized state, and initialize it for use.
 		for k, v := range c.InitialState.APIs {
-			v.HuguesSize(ctx)
+			//v.HuguesSize(ctx)
 			start2 := time.Now()
 			s := v.Clone()
-			log.E(ctx, "HUGUES CloneState clone API%v: %v", k.ID(), time.Since(start2))
-			start2 = time.Now()
+			log.E(ctx, "HUGUES CLONE STATE API%v: %v", k.ID(), time.Since(start2))
+			//start2 = time.Now()
 			s.SetupInitialState(ctx, out)
-			log.E(ctx, "HUGUES CloneState API%v setupInitial: %v", k.ID(), time.Since(start2))
+			//log.E(ctx, "HUGUES CloneState API%v setupInitial: %v", k.ID(), time.Since(start2))
 			out.APIs[k.ID()] = s
 		}
-		log.E(ctx, "HUGUES CloneState API init state: %v", time.Since(start))
+		//log.E(ctx, "HUGUES CloneState API init state: %v", time.Since(start))
 	}
-	log.E(ctx, "HUGUES CloneState duration: %v", time.Since(start))
+	//log.E(ctx, "HUGUES CloneState duration: %v", time.Since(start))
 	return out
 }
 

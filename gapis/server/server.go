@@ -231,8 +231,8 @@ func (s *server) LoadCapture(ctx context.Context, path string) (*path.Capture, e
 		api.ForeachCmd(ctx, g.Commands, true, callback)
 		log.E(ctx, "HUGUES num of vkBindPipeline: %v", n)
 
-		for _, a := range g.APIs {
-			if err := a.CleanupInitialState(ctx, p); err != nil {
+		for _, s := range g.InitialState.APIs {
+			if err := s.HuguesCleanup(ctx, p); err != nil {
 				return nil, err
 			}
 		}
