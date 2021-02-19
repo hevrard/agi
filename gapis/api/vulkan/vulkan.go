@@ -64,6 +64,69 @@ func (*State) Root(ctx context.Context, p *path.State, r *path.ResolveConfig) (p
 	return p, nil
 }
 
+func (s *State) HuguesCleanup(ctx context.Context, p *path.Capture) error {
+
+	log.E(ctx, "HUGUES state cleanup")
+
+	pipelines := map[VkPipeline]struct{}{}
+
+	log.E(ctx, "HUGUES number of lastComputeInfo:%v", s.LastComputeInfos().Len())
+	for _, i := range s.LastComputeInfos().All() {
+		handle := i.ComputePipeline().VulkanHandle()
+		log.E(ctx, "HUGUES initial state compute pipeline:%v", handle)
+		pipelines[handle] = struct{}{}
+	}
+
+	log.E(ctx, "HUGUES number of lastDrawInfo:%v", s.LastDrawInfos().Len())
+	for _, i := range s.LastDrawInfos().All() {
+		handle := i.GraphicsPipeline().VulkanHandle()
+		log.E(ctx, "HUGUES initial state graphics pipeline:%v", handle)
+		pipelines[handle] = struct{}{}
+	}
+
+	postSubCmdCb := func(state *api.GlobalState, subCmdIdx api.SubCmdIdx, cmd api.Cmd, i interface{}) {
+		vkState := GetState(state)
+		cmdRef, ok := i.(CommandReferenceʳ)
+		if !ok {
+			panic("In Vulkan, MutateWithSubCommands' postSubCmdCb 'interface{}' is not a CommandReferenceʳ")
+		}
+		cmdArgs := GetCommandArgs(ctx, cmdRef, vkState)
+
+		switch args := cmdArgs.(type) {
+		case VkCmdBindPipelineArgsʳ:
+			pl := args.Pipeline()
+			log.E(ctx, "HUGUES saw vkBindPipeLine:%v", pl)
+			pipelines[pl] = struct{}{}
+		}
+	}
+
+	c, err := capture.ResolveGraphicsFromPath(ctx, p)
+	if err != nil {
+		return err
+	}
+	if err := sync.MutateWithSubcommands(ctx, p, c.Commands, nil, nil, postSubCmdCb); err != nil {
+		return err
+	}
+
+	log.E(ctx, "HUGUES CleanupInitialState bindedPipeline:%v", len(pipelines))
+
+	gpl := s.GraphicsPipelines()
+	log.E(ctx, "HUGUES num gfx pl before cleanup:%v", gpl.Len())
+	toremove := []VkPipeline{}
+	for p := range gpl.All() {
+		if _, ok := pipelines[p]; !ok {
+			toremove = append(toremove, p)
+		}
+	}
+	log.E(ctx, "HUGUES toremove:%v", len(toremove))
+	for _, p := range toremove {
+		gpl.Remove(p)
+	}
+	log.E(ctx, "HUGUES num gfx pl before cleanup:%v", gpl.Len())
+
+	return nil
+}
+
 func (s *State) HuguesSize(ctx context.Context) {
 	log.E(ctx, "HUGUES instances: %v", s.Instances().Len())
 	log.E(ctx, "HUGUES PhysicalDevices: %v", s.PhysicalDevices().Len())
@@ -550,34 +613,41 @@ func (API) MutateSubcommands(ctx context.Context, id api.CmdID, cmd api.Cmd,
 
 func (API) CleanupInitialState(ctx context.Context, p *path.Capture) error {
 
-	log.E(ctx, "HUGUES enter CleanupInitialState")
+	// log.E(ctx, "HUGUES enter CleanupInitialState")
 
-	numBindPipeline := 0
+	// pipelines := map[VkPipeline]struct{}{}
 
-	postSubCmdCb := func(state *api.GlobalState, subCmdIdx api.SubCmdIdx, cmd api.Cmd, i interface{}) {
-		vkState := GetState(state)
-		cmdRef, ok := i.(CommandReferenceʳ)
-		if !ok {
-			panic("In Vulkan, MutateWithSubCommands' postSubCmdCb 'interface{}' is not a CommandReferenceʳ")
-		}
-		cmdArgs := GetCommandArgs(ctx, cmdRef, vkState)
+	// postSubCmdCb := func(state *api.GlobalState, subCmdIdx api.SubCmdIdx, cmd api.Cmd, i interface{}) {
+	// 	vkState := GetState(state)
+	// 	cmdRef, ok := i.(CommandReferenceʳ)
+	// 	if !ok {
+	// 		panic("In Vulkan, MutateWithSubCommands' postSubCmdCb 'interface{}' is not a CommandReferenceʳ")
+	// 	}
+	// 	cmdArgs := GetCommandArgs(ctx, cmdRef, vkState)
 
-		switch cmdArgs.(type) {
-		case VkCmdBindPipelineArgsʳ:
-			log.E(ctx, "HUGUES saw vkBindPipeLine")
-			numBindPipeline++
-		}
-	}
+	// 	switch args := cmdArgs.(type) {
+	// 	case VkCmdBindPipelineArgsʳ:
+	// 		pl := args.Pipeline()
+	// 		log.E(ctx, "HUGUES saw vkBindPipeLine:%v", pl)
+	// 		pipelines[pl] = struct{}{}
+	// 	}
+	// }
 
 	c, err := capture.ResolveGraphicsFromPath(ctx, p)
 	if err != nil {
 		return err
 	}
-	if err := sync.MutateWithSubcommands(ctx, p, c.Commands, nil, nil, postSubCmdCb); err != nil {
-		return err
-	}
+	// if err := sync.MutateWithSubcommands(ctx, p, c.Commands, nil, nil, postSubCmdCb); err != nil {
+	// 	return err
+	// }
 
-	log.E(ctx, "HUGUES CleanupInitialState bindPipeline:%v", numBindPipeline)
+	// log.E(ctx, "HUGUES CleanupInitialState bindedPipeline:%v", len(pipelines))
+
+	for _, v := range c.InitialState.APIs {
+		if err := v.HuguesCleanup(ctx, p); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

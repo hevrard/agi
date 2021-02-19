@@ -153,7 +153,7 @@ func (c *GraphicsCapture) NewState(ctx context.Context) *api.GlobalState {
 
 		// Clone serialized state, and initialize it for use.
 		for k, v := range c.InitialState.APIs {
-			// v.HuguesSize(ctx)
+			v.HuguesSize(ctx)
 			start2 := time.Now()
 			s := v.Clone()
 			log.E(ctx, "HUGUES CloneState clone API%v: %v", k.ID(), time.Since(start2))
